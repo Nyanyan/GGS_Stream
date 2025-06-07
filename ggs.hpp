@@ -9,9 +9,11 @@
 	@notice modified for GGS Stream Project
 */
 #pragma once
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include "board.hpp"
 // #include "option.hpp"
-// #include "util.hpp"
+#include "util.hpp"
 #pragma comment(lib, "ws2_32.lib")
 
 #define GGS_URL "skatgame.net"
@@ -109,6 +111,59 @@ void ggs_print_info(std::string str) { // yellow
     std::cout << "\033[0m";
 }
 
+// int ggs_connect(WSADATA &wsaData, struct sockaddr_in &server, SOCKET &sock) {
+//     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+//         std::cerr << "Failed to initialize Winsock. Error Code: " << WSAGetLastError() << std::endl;
+//         return 1;
+//     }
+
+//     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
+//         std::cerr << "Could not create socket. Error Code: " << WSAGetLastError() << std::endl;
+//         WSACleanup();
+//         return 1;
+//     }
+
+    
+//     const char* hostname = GGS_URL;
+//     struct hostent* he = gethostbyname(hostname);
+//     if (he == nullptr) {
+//         std::cerr << "Failed to resolve hostname. Error Code: " << WSAGetLastError() << std::endl;
+//         closesocket(sock);
+//         WSACleanup();
+//         return 1;
+//     }
+
+//     server.sin_addr.s_addr = *(u_long*)he->h_addr_list[0];
+//     server.sin_family = AF_INET;
+//     server.sin_port = htons(GGS_PORT);
+    
+//     /*
+//     const char* hostname = GGS_URL;
+//     struct addrinfo hints, *result;
+//     ZeroMemory(&hints, sizeof(hints));
+//     hints.ai_family = AF_INET;
+//     hints.ai_socktype = SOCK_STREAM;
+//     hints.ai_protocol = IPPROTO_TCP;
+//     if (getaddrinfo(hostname, std::to_string(GGS_PORT).c_str(), &hints, &result) != 0) {
+//         std::cerr << "Failed to resolve hostname. Error Code: " << WSAGetLastError() << std::endl;
+//         closesocket(sock);
+//         WSACleanup();
+//         return 1;
+//     }
+
+//     memcpy(&server, result->ai_addr, result->ai_addrlen);
+//     freeaddrinfo(result);
+//     */
+
+//     if (connect(sock, (struct sockaddr*)&server, sizeof(server)) < 0) {
+//         std::cerr << "Connection failed. Error Code: " << WSAGetLastError() << std::endl;
+//         closesocket(sock);
+//         WSACleanup();
+//         return 1;
+//     }
+//     return 0;
+// }
+
 int ggs_connect(WSADATA &wsaData, struct sockaddr_in &server, SOCKET &sock) {
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         std::cerr << "Failed to initialize Winsock. Error Code: " << WSAGetLastError() << std::endl;
@@ -121,37 +176,24 @@ int ggs_connect(WSADATA &wsaData, struct sockaddr_in &server, SOCKET &sock) {
         return 1;
     }
 
-    
     const char* hostname = GGS_URL;
-    struct hostent* he = gethostbyname(hostname);
-    if (he == nullptr) {
-        std::cerr << "Failed to resolve hostname. Error Code: " << WSAGetLastError() << std::endl;
-        closesocket(sock);
-        WSACleanup();
-        return 1;
-    }
+    struct addrinfo hints = {};
+    struct addrinfo* result = nullptr;
 
-    server.sin_addr.s_addr = *(u_long*)he->h_addr_list[0];
-    server.sin_family = AF_INET;
-    server.sin_port = htons(GGS_PORT);
-    
-    /*
-    const char* hostname = GGS_URL;
-    struct addrinfo hints, *result;
-    ZeroMemory(&hints, sizeof(hints));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
-    if (getaddrinfo(hostname, std::to_string(GGS_PORT).c_str(), &hints, &result) != 0) {
+
+    int ret = getaddrinfo(hostname, std::to_string(GGS_PORT).c_str(), &hints, &result);
+    if (ret != 0 || result == nullptr) {
         std::cerr << "Failed to resolve hostname. Error Code: " << WSAGetLastError() << std::endl;
         closesocket(sock);
         WSACleanup();
         return 1;
     }
 
-    memcpy(&server, result->ai_addr, result->ai_addrlen);
+    memcpy(&server, result->ai_addr, sizeof(struct sockaddr_in));
     freeaddrinfo(result);
-    */
 
     if (connect(sock, (struct sockaddr*)&server, sizeof(server)) < 0) {
         std::cerr << "Connection failed. Error Code: " << WSAGetLastError() << std::endl;
@@ -371,14 +413,14 @@ GGS_Board ggs_get_board(std::string str) {
     return res;
 }
 
-void ggs_terminate_ponder(std::future<std::vector<Ponder_elem>> ponder_futures[], bool ponder_searchings[], int synchro_id) {
-    ponder_searchings[synchro_id] = false; // terminate ponder
-    if (ponder_futures[synchro_id].valid()) {
-        ponder_futures[synchro_id].get();
-    }
-}
+// void ggs_terminate_ponder(std::future<std::vector<Ponder_elem>> ponder_futures[], bool ponder_searchings[], int synchro_id) {
+//     ponder_searchings[synchro_id] = false; // terminate ponder
+//     if (ponder_futures[synchro_id].valid()) {
+//         ponder_futures[synchro_id].get();
+//     }
+// }
 
-void ggs_client_init(std::stirng username, std::string password) {
+void ggs_client_init(std::string username, std::string password) {
     struct sockaddr_in server;
     
     // connect to GGS server
@@ -390,9 +432,9 @@ void ggs_client_init(std::stirng username, std::string password) {
     ggs_receive_message(&sock);
 
     // login
-    ggs_send_message(sock, ggs_username + "\n");
+    ggs_send_message(sock, username + "\n");
     ggs_receive_message(&sock);
-    ggs_send_message(sock, ggs_password + "\n");
+    ggs_send_message(sock, password + "\n");
     ggs_receive_message(&sock);
 
     // initialize
@@ -419,7 +461,7 @@ std::string ggs_get_sender(std::string line) {
 	return line;
 }
 
-std::stirng ggs_get_content(std::string line) {
+std::string ggs_get_content(std::string line) {
 	size_t pos = line.find(':');
 	if (pos != std::string::npos && pos + 1 < line.size()) {
 		return line.substr(pos + 1);
