@@ -258,6 +258,29 @@ bool ggs_is_match_start(std::string line, std::string username) {
     return false;
 }
 
+bool ggs_is_tournament_match_start(std::string line) {
+    std::vector<std::string> words = split_by_space(line);
+	if (words.size() >= 10) {
+    	return (words[0] == "/os:" && words[1] == "+" && words[2] == "match" && words[9] == "T");
+	}
+	return false;
+}
+
+bool ggs_is_tournament_match_end(std::string line) {
+    std::vector<std::string> words = split_by_space(line);
+	if (words.size() >= 10) {
+    	return (words[0] == "/os:" && words[1] == "-" && words[2] == "match" && words[9] == "T");
+	} return false;
+}
+
+std::string ggs_get_tournament_match_id(std::string line) {
+	std::vector<std::string> words = split_by_space(line);
+	if (words.size() >= 4) {
+		return words[3];
+	}
+	return "";
+}
+
 bool ggs_is_match_end(std::string line, std::string username) {
     std::vector<std::string> words = split_by_space(line);
     if (std::find(words.begin(), words.end(), username) != words.end()) {
@@ -464,7 +487,7 @@ std::string ggs_get_sender(std::string line) {
 std::string ggs_get_content(std::string line) {
 	size_t pos = line.find(':');
 	if (pos != std::string::npos && pos + 1 < line.size()) {
-		return line.substr(pos + 1);
+		return line.substr(pos + 2); // +2 for ignoring space
 	}
 	return "";
 }
@@ -492,6 +515,32 @@ int ggs_get_starting_round(std::string line, std::string tournament_id) {
 		}
 		return -1;
 	}
+}
+
+int ggs_get_end_round(std::string line, std::string tournament_id) {
+	// .tourney /td: ending round 10 of tournament 6
+	std::string sender = ggs_get_sender(line);
+	if (sender == ".tourney /td") {
+		std::string content = ggs_get_content(line);
+		if (content.rfind("ending round ", 0) == 0) {
+			size_t pos = std::string("ending round ").size();
+			std::string latter_part = " of tournament " + tournament_id;
+			size_t end_pos = content.find(latter_part, pos);
+			if (end_pos != std::string::npos) {
+				std::string round_num = content.substr(pos, end_pos - pos);
+				// round_numが整数かチェック
+				if (!round_num.empty() && std::all_of(round_num.begin(), round_num.end(), ::isdigit)) {
+					try {
+						int round = std::stoi(round_num);
+						return round;
+					} catch (...) {
+						return -1;
+					}
+				}
+			}
+		}
+	}
+	return -1;
 }
 
 void ggs_watch_game(std::string game_id) {
