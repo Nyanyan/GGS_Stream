@@ -35,6 +35,7 @@ struct GGS_Board {
     bool is_synchro;
     int synchro_id;
     int last_move;
+	double last_score;
     std::string player_black;
     uint64_t remaining_seconds_black;
     std::string player_white;
@@ -47,6 +48,7 @@ struct GGS_Board {
         is_synchro = false;
         synchro_id = -1;
         last_move = -1;
+		last_score = -127;
         player_black = "";
         remaining_seconds_black = 0;
         player_white = "";
@@ -76,6 +78,12 @@ struct GGS_Match {
     bool is_initialized() {
         return game_id == "";
     }
+};
+
+struct Rank_Player{
+	std::string name;
+	std::string point;
+	std::string wdl;
 };
 
 void ggs_print_send(std::string str) { // cyan
@@ -226,6 +234,16 @@ std::vector<std::string> ggs_receive_message(SOCKET *sock) {
     } else {
         server_reply[recv_size] = '\0';
         res = split_by_delimiter(server_reply, GGS_READY);
+		for (auto &s : res) {
+			// Remove leading "\n" or "\r\n"
+			if (!s.empty()) {
+				if (s.substr(0, 2) == "\r\n") {
+					s.erase(0, 2);
+				} else if (s[0] == '\n' || s[0] == '\r') {
+					s.erase(0, 1);
+				}
+			}
+		}
         ggs_print_receive(server_reply);
     }
     return res;
@@ -316,6 +334,25 @@ std::string ggs_match_request_get_id(std::string line) {
     return "";
 }
 
+bool ggs_is_match_info(std::string line) {
+	std::vector<std::string> words = split_by_space(line);
+	return words.size() >= 3 && words[0] == "/os:" && words[1] == "match";
+}
+
+std::vector<std::string> ggs_get_match_ids(std::string line) {
+	std::vector<std::string> lines = split_by_delimiter(line, "\n");
+	std::vector<std::string> match_ids;
+	for (const auto& l : lines) {
+		if (!l.empty() && l[0] == '|') {
+			std::vector<std::string> words = split_by_space(l);
+			if (words.size() > 1) {
+				match_ids.push_back(words[1]);
+			}
+		}
+	}
+	return match_ids;
+}
+
 std::string ggs_board_get_id(std::string line) {
     std::vector<std::string> words = split_by_space(line);
     if (words.size() >= 3) {
@@ -389,13 +426,25 @@ GGS_Board ggs_get_board(std::string str) {
                 continue;
             }
 
-            // last move
+            // last move & last score
             if (!is_join) {
                 if (line.substr(0, 2) == "| ") {
                     if (words.size() >= 3) {
                         if (words[1][words[1].size() - 1] == ':' && words[2].size() >= 2) {
                             res.last_move = get_coord_from_chars(words[2][0], words[2][1]);
-                            continue;
+							size_t first_slash = words[2].find('/');
+							size_t second_slash = words[2].find('/', first_slash + 1);
+							if (first_slash != std::string::npos && second_slash != std::string::npos && second_slash > first_slash + 1) {
+								std::string score_str = words[2].substr(first_slash + 1, second_slash - first_slash - 1);
+								try {
+									res.last_score = std::stod(score_str);
+								} catch (...) {
+									res.last_score = -127;
+								}
+							} else {
+								res.last_score = -127;
+							}
+							continue;
                         }
                     }
                 }
@@ -469,11 +518,37 @@ void ggs_client_init(std::string username, std::string password) {
 	// add tourney channel
 	ggs_send_message(sock, "chann + .tourney\n");
     ggs_receive_message(&sock);
+
+	ggs_send_message(sock, "chann + /os\n");
+    ggs_receive_message(&sock);
 }
 
-std::string ggs_client_get_ranking(std::string tournament_id) {
-	ggs_send_message(sock, "tell /td r " + tournament_id + "\n");
-    ggs_receive_message(&sock);
+bool ggs_is_ranking(std::string lines, std::string tournament_id) {
+	std::string prefix = "/td: rankings: tournament " + tournament_id;
+	return lines.rfind(prefix, 0) == 0;
+}
+
+std::vector<Rank_Player> ggs_client_get_ranking(std::string lines, std::string tournament_id) {
+	std::vector<std::string> all_lines = split_by_delimiter(lines, "\n");
+	std::vector<Rank_Player> ranking;
+	for (const auto& line : all_lines) {
+		if (line.empty() || line[0] != '|') continue;
+		std::vector<std::string> words = split_by_space(line);
+		if (words.size() >= 4) {
+			Rank_Player rp;
+			rp.name = words[words.size() - 2];
+			rp.point = words[0].substr(1);
+			size_t start = line.find('(');
+			size_t end = line.find(')', start);
+			if (start != std::string::npos && end != std::string::npos && end > start) {
+				rp.wdl = line.substr(start, end - start + 1);
+			} else {
+				rp.wdl = "";
+			}
+			ranking.push_back(rp);
+		}
+	}
+	return ranking;
 }
 
 std::string ggs_get_sender(std::string line) {
@@ -493,49 +568,20 @@ std::string ggs_get_content(std::string line) {
 }
 
 int ggs_get_starting_round(std::string line, std::string tournament_id) {
-	std::string sender = ggs_get_sender(line);
-	if (sender == ".tourney /td") {
-		std::string content = ggs_get_content(line);
-		if (content.rfind("starting round ", 0) == 0) {
-			size_t pos = std::string("starting round ").size();
-			std::string latter_part = " of tournament " + tournament_id;
-			size_t end_pos = content.find(latter_part, pos);
-			if (end_pos != std::string::npos) {
-				std::string round_num = content.substr(pos, end_pos - pos);
-				// round_numが整数かチェック
-				if (!round_num.empty() && std::all_of(round_num.begin(), round_num.end(), ::isdigit)) {
-					try {
-						int round = std::stoi(round_num);
-						return round;
-					} catch (...) {
-						return -1;
-					}
-				}
-			}
-		}
-		return -1;
-	}
-}
-
-int ggs_get_end_round(std::string line, std::string tournament_id) {
-	// .tourney /td: ending round 10 of tournament 6
-	std::string sender = ggs_get_sender(line);
-	if (sender == ".tourney /td") {
-		std::string content = ggs_get_content(line);
-		if (content.rfind("ending round ", 0) == 0) {
-			size_t pos = std::string("ending round ").size();
-			std::string latter_part = " of tournament " + tournament_id;
-			size_t end_pos = content.find(latter_part, pos);
-			if (end_pos != std::string::npos) {
-				std::string round_num = content.substr(pos, end_pos - pos);
-				// round_numが整数かチェック
-				if (!round_num.empty() && std::all_of(round_num.begin(), round_num.end(), ::isdigit)) {
-					try {
-						int round = std::stoi(round_num);
-						return round;
-					} catch (...) {
-						return -1;
-					}
+	// example: .tourney /td: starting round 10 of tournament 6
+	std::string prefix = ".tourney /td: starting round ";
+	std::string suffix = " of tournament " + tournament_id;
+	if (line.rfind(prefix, 0) == 0) {
+		size_t pos = prefix.size();
+		size_t end_pos = line.find(suffix, pos);
+		if (end_pos != std::string::npos) {
+			std::string round_num = line.substr(pos, end_pos - pos);
+			if (!round_num.empty() && std::all_of(round_num.begin(), round_num.end(), ::isdigit)) {
+				try {
+					int round = std::stoi(round_num);
+					return round;
+				} catch (...) {
+					return -1;
 				}
 			}
 		}
