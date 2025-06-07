@@ -1,7 +1,21 @@
 ﻿# include <Siv3D.hpp> // Siv3D v0.6.15
+#include "ggs.hpp"
+
+void init_board_processing() {
+    bit_init();
+    mobility_init();
+    flip_init();
+}
 
 void Main()
 {
+	std::string username, password;
+
+	Console.open();
+
+	init_board_processing();
+	ggs_client_init(username, password);
+
 	// 背景の色を設定する | Set the background color
 	Scene::SetBackground(ColorF{ 0.6, 0.8, 0.7 });
 
