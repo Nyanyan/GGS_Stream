@@ -17,7 +17,6 @@ void Main()
 	std::string username, password;
 
 
-
 	Console.open();
 
 	init_board_processing();
@@ -42,10 +41,25 @@ void Main()
 
 	while (System::Update())
 	{
-		// 2分おきにkeepaliveメッセージを送信
-		if (keepalive_timer.sF() >= 120.0) {
-			ggs_send_message(sock, "\n");
+		// 1分おきにkeepaliveメッセージを送信
+		if (keepalive_timer.sF() >= 60.0) {
+			// ggs_send_message(sock, "\n");
+			ggs_send_message(sock, "t /td r " + tournament_id + "\n");
 			keepalive_timer.restart();
+		}
+
+		for (const auto& game_id : matches) {
+			bool found = false;
+			for (const auto& board : ggs_boards) {
+				if (board.game_id.find(game_id) == 0) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				ggs_watch_game(game_id);
+				break;
+			}
 		}
 
 		// check server reply
@@ -59,84 +73,87 @@ void Main()
         }
 
 		// GGS
-		if (server_replies.size()) {
-            // match start
-            for (std::string server_reply: server_replies) {
-                if (server_reply.size()) {
-					std::string os_info = ggs_get_os_info(server_reply);
+		for (std::string server_reply: server_replies) {
+			if (server_reply.size()) {
+				std::cerr << "----- REPLY START -----" << std::endl;
+				std::cerr << server_reply << std::endl;
+				std::cerr << "----- REPLY END -----" << std::endl;
+				std::string os_info = ggs_get_os_info(server_reply);
 
-					int round = ggs_get_starting_round(server_reply, tournament_id);
-					if (round != -1) {
-						std::cout << "round " << round << " start!" << std::endl;
-						playing_round = round;
-						matches.clear();
-						ggs_boards.clear();
-						ggs_send_message(sock, "ts match\n");
-						ggs_send_message(sock, "t /td r " + tournament_id + "\n");
-					}
+				int round = ggs_get_starting_round(server_reply, tournament_id);
+				if (round != -1) {
+					std::cout << "round " << round << " start!" << std::endl;
+					playing_round = round;
+					matches.clear();
+					ggs_boards.clear();
+					ggs_send_message(sock, "ts match\n");
+					ggs_send_message(sock, "t /td r " + tournament_id + "\n");
+				}
 
-                    // // match start
-                    // if (ggs_is_tournament_match_start(server_reply)) {
-					// 	std::string game_id = ggs_get_tournament_match_id(server_reply);
-                    //     ggs_print_info("match start! " + game_id);
-					// 	ggs_watch_game(game_id);
-					// 	matches.emplace_back(game_id);
-                    // }
+				int round2 = ggs_get_ending_round(server_reply, tournament_id);
+				if (round2 != -1) {
+					std::cout << "round " << round2 << " finished!" << std::endl;
+					playing_round = round2;
+					ggs_send_message(sock, "t /td r " + tournament_id + "\n");
+				}
 
-					// // match end
-					// if (ggs_is_tournament_match_end(server_reply)) {
-					// 	std::string game_id = ggs_get_tournament_match_id(server_reply);
-                    //     ggs_print_info("match end! " + game_id);
-                    // }
+				// // match start
+				// if (ggs_is_tournament_match_start(server_reply)) {
+				// 	std::string game_id = ggs_get_tournament_match_id(server_reply);
+				//     ggs_print_info("match start! " + game_id);
+				// 	ggs_watch_game(game_id);
+				// 	matches.emplace_back(game_id);
+				// }
 
-					// match info
-					if (ggs_is_match_info(server_reply)) {
-						matches = ggs_get_match_ids(server_reply);
-						for (const auto& game_id : matches) {
-							ggs_watch_game(game_id);
+				// // match end
+				// if (ggs_is_tournament_match_end(server_reply)) {
+				// 	std::string game_id = ggs_get_tournament_match_id(server_reply);
+				//     ggs_print_info("match end! " + game_id);
+				// }
+
+				// match info
+				if (ggs_is_match_info(server_reply)) {
+					matches = ggs_get_match_ids(server_reply);
+				}
+
+				// tournament rankings
+				if (ggs_is_ranking(server_reply, tournament_id)) {
+					rankings = ggs_client_get_ranking(server_reply, tournament_id);
+				}
+
+				// board info
+				if (ggs_is_board_info(os_info)) {
+					GGS_Board ggs_board = ggs_get_board(server_reply);
+					if (ggs_board.is_valid()) {
+						std::cerr << ggs_board.game_id << std::endl;
+						ggs_board.board.print();
+
+						auto it = std::find_if(ggs_boards.begin(), ggs_boards.end(),
+							[&](const GGS_Board& b) {
+								return b.game_id == ggs_board.game_id;
+							});
+						if (it != ggs_boards.end()) {
+							size_t idx = std::distance(ggs_boards.begin(), it);
+							ggs_boards[idx] = ggs_board;
+							if (ggs_board.player_to_move == BLACK) {
+								last_scores[idx].second = ggs_board.last_score;
+							} else if (ggs_board.player_to_move == WHITE) {
+								last_scores[idx].first = ggs_board.last_score;
+							}
+						} else {
+							std::cerr << "emplace back new board " << ggs_board.game_id << std::endl;
+							ggs_boards.emplace_back(ggs_board);
+							last_scores.emplace_back(std::make_pair(-127.0, -127.0));
+							if (ggs_board.player_to_move == BLACK) {
+								last_scores[last_scores.size() - 1].second = ggs_board.last_score;
+							} else if (ggs_board.player_to_move == WHITE) {
+								last_scores[last_scores.size() - 1].first = ggs_board.last_score;
+							}
 						}
 					}
+				}
 
-					// tournament rankings
-					if (ggs_is_ranking(server_reply, tournament_id)) {
-						rankings = ggs_client_get_ranking(server_reply, tournament_id);
-					}
-
-					// board info
-                    if (ggs_is_board_info(os_info)) {
-                        GGS_Board ggs_board = ggs_get_board(server_reply);
-                        if (ggs_board.is_valid()) {
-							ggs_print_info("ggs board synchro id " + std::to_string(ggs_board.synchro_id));
-							std::cerr << ggs_board.game_id << "/" << ggs_board.synchro_id << std::endl;
-							ggs_board.board.print();
-
-							auto it = std::find_if(ggs_boards.begin(), ggs_boards.end(),
-								[&](const GGS_Board& b) {
-									return b.game_id == ggs_board.game_id;
-								});
-							if (it != ggs_boards.end()) {
-								size_t idx = std::distance(ggs_boards.begin(), it);
-								ggs_boards[idx] = ggs_board;
-								if (ggs_board.player_to_move == BLACK) {
-									last_scores[idx].second = ggs_board.last_score;
-								} else if (ggs_board.player_to_move == WHITE) {
-									last_scores[idx].first = ggs_board.last_score;
-								}
-							} else {
-								std::cerr << "emplace back new board " << ggs_board.game_id << std::endl;
-								ggs_boards.emplace_back(ggs_board);
-								last_scores.emplace_back(std::make_pair(-127.0, -127.0));
-								if (ggs_board.player_to_move == BLACK) {
-									last_scores[last_scores.size() - 1].second = ggs_board.last_score;
-								} else if (ggs_board.player_to_move == WHITE) {
-									last_scores[last_scores.size() - 1].first = ggs_board.last_score;
-								}
-							}
-                        }
-                    }
-
-                }
-            }
+			}
 		}
 
 		// Drawing
@@ -182,7 +199,9 @@ void Main()
 
 		// matchesを走査し、そのインデックスをcolとする
 		for (size_t col = 0; col < matches.size(); ++col) {
+			double x = offset_x + col * (squareSize + square_horizontal_margin) + square_horizontal_margin;
 			const std::string& match_id = matches[col];
+			std::vector<std::pair<std::string, int>> total_result;
 			for (size_t board_idx = 0; board_idx < ggs_boards.size(); ++board_idx) {
 				const auto& board = ggs_boards[board_idx];
 				const std::string& gid = board.game_id;
@@ -193,7 +212,6 @@ void Main()
 				std::string prefix = gid.substr(0, second_dot);
 				if (prefix == match_id) {
 					int row = board.synchro_id;
-					double x = offset_x + col * (squareSize + square_horizontal_margin) + square_horizontal_margin;
 					double y = offset_y + row * (squareSize + square_vertical_margin) + square_vertical_margin;
 
 					// 64ビット整数のboard.board.playerを上位ビットから1ビットずつ走査
@@ -239,6 +257,19 @@ void Main()
 						}
 					}
 
+					if (total_result.size() == 0) {
+						total_result.emplace_back(std::make_pair(board.player_black, black_count));
+						total_result.emplace_back(std::make_pair(board.player_white, white_count));
+					} else {
+						for (auto& result : total_result) {
+							if (result.first == board.player_black) {
+								result.second += black_count;
+							} else if (result.first == board.player_white) {
+								result.second += white_count;
+							}
+						}
+					}
+
 					// ゲームID
 					small_font(Unicode::Widen(board.game_id)).draw(Arg::topRight(x - 5, y), Palette::White);
 
@@ -247,19 +278,41 @@ void Main()
 					small_font(stone_info).draw(Arg::topRight(x - 5, y + 30), Palette::White);
 
 					String black_info = U"Black: " + Unicode::Widen(board.player_black);
+					if (board.player_to_move == BLACK) {
+						black_info = U"* " + black_info;
+					}
 					small_font(black_info).draw(Arg::topRight(x - 5, y + 60), Palette::White);
+					uint64_t seconds_black = board.remaining_seconds_black;
+					int minute_black = seconds_black / 60;
+					int minute_second_black = seconds_black - minute_black * 60;
+					String remaining_time_black = U"Remaining " + Format(minute_black) + U":" + Format(minute_second_black).lpadded(2, U'0');
+					small_font(remaining_time_black).draw(Arg::topRight(x - 5, y + 80), Palette::White);
 					if (last_scores[board_idx].first != -127) {
 						String black_score = U"Score: " + Format(last_scores[board_idx].first);
-						small_font(black_score).draw(Arg::topRight(x - 5, y + 80), Palette::White);
+						small_font(black_score).draw(Arg::topRight(x - 5, y + 100), Palette::White);
 					}
 
 					String white_info = U"White: " + Unicode::Widen(board.player_white);
-					small_font(white_info).draw(Arg::topRight(x - 5, y + 110), Palette::White);
+					if (board.player_to_move == WHITE) {
+						white_info = U"* " + white_info;
+					}
+					small_font(white_info).draw(Arg::topRight(x - 5, y + 140), Palette::White);
+					uint64_t seconds_white = board.remaining_seconds_white;
+					int minute_white = seconds_white / 60;
+					int minute_second_white = seconds_white - minute_white * 60;
+					String remaining_time_white = U"Remaining " + Format(minute_white) + U":" + Format(minute_second_white).lpadded(2, U'0');
+					small_font(remaining_time_white).draw(Arg::topRight(x - 5, y + 160), Palette::White);
 					if (last_scores[board_idx].second != -127) {
 						String white_score = U"Score: " + Format(last_scores[board_idx].second);
-						small_font(white_score).draw(Arg::topRight(x - 5, y + 130), Palette::White);
+						small_font(white_score).draw(Arg::topRight(x - 5, y + 180), Palette::White);
 					}
 				}
+			}
+			if (!total_result.empty()) {
+				String players = Unicode::Widen(total_result[0].first) + U" vs " + Unicode::Widen(total_result[1].first);
+				font(players).draw(Arg::topCenter(x + squareSize / 2, offset_y + square_vertical_margin - 100), Palette::White);
+				String result = Format(total_result[0].second) + U" - " + Format(total_result[1].second);
+				font(result).draw(Arg::topCenter(x + squareSize / 2, offset_y + square_vertical_margin - 50), Palette::White);
 			}
 		}
 

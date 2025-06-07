@@ -537,7 +537,12 @@ std::vector<Rank_Player> ggs_client_get_ranking(std::string lines, std::string t
 		if (words.size() >= 4) {
 			Rank_Player rp;
 			rp.name = words[words.size() - 2];
-			rp.point = words[0].substr(1);
+			size_t paren_pos = line.find('(');
+			if (paren_pos != std::string::npos && paren_pos > 1) {
+				rp.point = line.substr(1, paren_pos - 1);
+			} else {
+				rp.point = line.substr(1);
+			}
 			size_t start = line.find('(');
 			size_t end = line.find(')', start);
 			if (start != std::string::npos && end != std::string::npos && end > start) {
@@ -588,6 +593,30 @@ int ggs_get_starting_round(std::string line, std::string tournament_id) {
 	}
 	return -1;
 }
+
+int ggs_get_ending_round(std::string line, std::string tournament_id) {
+	// example: .tourney /td: ending round 10 of tournament 6
+	std::string prefix = ".tourney /td: ending round ";
+	std::string suffix = " of tournament " + tournament_id;
+	if (line.rfind(prefix, 0) == 0) {
+		size_t pos = prefix.size();
+		size_t end_pos = line.find(suffix, pos);
+		if (end_pos != std::string::npos) {
+			std::string round_num = line.substr(pos, end_pos - pos);
+			if (!round_num.empty() && std::all_of(round_num.begin(), round_num.end(), ::isdigit)) {
+				try {
+					int round = std::stoi(round_num);
+					return round;
+				} catch (...) {
+					return -1;
+				}
+			}
+		}
+	}
+	return -1;
+}
+
+
 
 void ggs_watch_game(std::string game_id) {
 	ggs_send_message(sock, "tell /os watch + " + game_id + "\n");
