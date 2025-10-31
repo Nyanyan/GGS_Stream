@@ -167,7 +167,7 @@ void Main()
 		}
 
 		// Drawing
-		int boards_size = 6; // ggs_boards.size();
+		int boards_size = 4; //ggs_boards.size();
 		int cols = (boards_size + 1) / 2;
 		if (cols == 0) cols = 1;
 		int rows = 2;
@@ -181,7 +181,7 @@ void Main()
 		double drawable_height = window_size.y - top_margin;
 		double cellWidth = (drawable_width - square_horizontal_margin * cols) / cols;
 		double cellHeight = (drawable_height - square_vertical_margin * (rows + 1)) / rows;
-		double squareSize = std::min(cellWidth, cellHeight);
+		double squareSize = std::min((double)400.0, std::min(cellWidth, cellHeight));
 
 		// ボードエリアの幅と高さ
 		double boards_total_width = cols * squareSize + cols * square_horizontal_margin;
