@@ -276,6 +276,21 @@ void Main()
 							}
 						}
 					}
+					
+					// 最後の手の位置に小さな丸を描画
+					if (is_valid_policy(board.last_move)) {
+						int last_r = HW_M1 - board.last_move / 8;
+						int last_c = HW_M1 - board.last_move % 8;
+						double last_cx = x + last_c * cell + cell / 2.0;
+						double last_cy = y + last_r * cell + cell / 2.0;
+						if (board.player_to_move == BLACK) {
+							// 最後の手が白の手なので、黒の丸を描画
+							Circle(last_cx, last_cy, cell * 0.1).draw(Palette::Black);
+						} else if (board.player_to_move == WHITE) {
+							// 最後の手が黒の手なので、白の丸を描画
+							Circle(last_cx, last_cy, cell * 0.1).draw(Palette::White);
+						}
+					}
 					int black_count = 0, white_count = 0;
 					for (int idx = 0; idx < 64; ++idx) {
 						int bit_pos = 63 - idx;
@@ -348,9 +363,9 @@ void Main()
 					}
 
 					// グラフの描画
-					double graph_y = y + squareSize + 20; // 20ピクセルのスペースを追加
+					double graph_y = y + squareSize + 10; // 10ピクセルのスペースを追加
 					const ScoreHistory& history = score_histories[board_idx];
-					if (history.history.size() >= 2) {
+					if (history.history.size() >= 1) {
 						// 石数の範囲を計算
 						int min_stones = 64, max_stones = 0;
 						double min_score = 64.0, max_score = -64.0;
@@ -389,8 +404,8 @@ void Main()
 							Line(x, zero_y, x + squareSize, zero_y).draw(1, ColorF(0.5, 0.5, 0.5));
 						}
 						
-						const double black_line_width = 2.0;
-						const double white_offset = black_line_width; // 黒の線幅分だけオフセット
+						const double line_width = 3.0; // 線の太さ
+						const double white_offset = line_width; // 黒の線幅分だけオフセット
 						
 						// 白番スコアの線を描画（離れていても繋げる）
 						double prev_white_x = -1, prev_white_y = -1;
@@ -402,7 +417,7 @@ void Main()
 								double point_y = graph_y + graph_height * (1.0 - (-white_score - min_score) / (max_score - min_score)) + white_offset;
 								
 								if (prev_white_x >= 0) {
-									Line(prev_white_x, prev_white_y, point_x, point_y).draw(4, Palette::White);
+									Line(prev_white_x, prev_white_y, point_x, point_y).draw(line_width, Palette::White);
 								}
 								prev_white_x = point_x;
 								prev_white_y = point_y;
@@ -419,7 +434,7 @@ void Main()
 								double point_y = graph_y + graph_height * (1.0 - (black_score - min_score) / (max_score - min_score));
 								
 								if (prev_black_x >= 0) {
-									Line(prev_black_x, prev_black_y, point_x, point_y).draw(black_line_width, Palette::Black);
+									Line(prev_black_x, prev_black_y, point_x, point_y).draw(line_width, Palette::Black);
 								}
 								prev_black_x = point_x;
 								prev_black_y = point_y;
