@@ -240,6 +240,37 @@ void Main()
 			const std::string& match_id = matches[col];
 			std::vector<std::pair<std::string, int>> total_result;
 			bool both_finished;
+			
+			// 同じmatch内のボードのスコアレンジを計算
+			double match_min_score = 64.0, match_max_score = -64.0;
+			int match_min_stones = 64, match_max_stones = 0;
+			for (size_t board_idx = 0; board_idx < ggs_boards.size(); ++board_idx) {
+				GGS_Board board = ggs_boards[board_idx];
+				const std::string& gid = board.game_id;
+				size_t first_dot = gid.find('.');
+				if (first_dot == std::string::npos) continue;
+				size_t second_dot = gid.find('.', first_dot + 1);
+				if (second_dot == std::string::npos) continue;
+				std::string prefix = gid.substr(0, second_dot);
+				if (prefix == match_id) {
+					const ScoreHistory& history = score_histories[board_idx];
+					for (const auto& [stones, black_score, white_score] : history.history) {
+						match_min_stones = std::min(match_min_stones, stones);
+						match_max_stones = std::max(match_max_stones, stones);
+						if (black_score != -127.0) {
+							match_min_score = std::min(match_min_score, black_score);
+							match_max_score = std::max(match_max_score, black_score);
+						}
+						if (white_score != -127.0) {
+							match_min_score = std::min(match_min_score, -white_score);
+							match_max_score = std::max(match_max_score, -white_score);
+						}
+					}
+				}
+			}
+			match_min_score -= 1.0;
+			match_max_score += 1.0;
+			
 			for (size_t board_idx = 0; board_idx < ggs_boards.size(); ++board_idx) {
 				GGS_Board board = ggs_boards[board_idx];
 				const std::string& gid = board.game_id;
@@ -250,7 +281,7 @@ void Main()
 				std::string prefix = gid.substr(0, second_dot);
 				if (prefix == match_id) {
 					int row = board.synchro_id;
-					double y = offset_y + row * (squareSize + square_vertical_margin + graph_height) + square_vertical_margin; // グラフ高さを考慮
+					double y = offset_y + row * (squareSize + square_vertical_margin + graph_height) + square_vertical_margin;
 
 					// 64ビット整数のboard.board.playerを上位ビットから1ビットずつ走査
 					double cell = squareSize / 8.0;
@@ -363,34 +394,35 @@ void Main()
 					}
 
 					// グラフの描画
-					double graph_y = y + squareSize + 10; // 10ピクセルのスペースを追加
+					double graph_y = y + squareSize + 10;
 					const ScoreHistory& history = score_histories[board_idx];
 					if (history.history.size() >= 1) {
-						// 石数の範囲を計算
-						int min_stones = 64, max_stones = 0;
-						double min_score = 64.0, max_score = -64.0;
-						for (const auto& [stones, black_score, white_score] : history.history) {
-							min_stones = std::min(min_stones, stones);
-							max_stones = std::max(max_stones, stones);
-							if (black_score != -127.0) {
-								min_score = std::min(min_score, black_score);
-								max_score = std::max(max_score, black_score);
-							}
-							if (white_score != -127.0) {
-								min_score = std::min(min_score, -white_score); // 白は反転
-								max_score = std::max(max_score, -white_score);
-							}
-						}
-						min_score -= 1.0;
-						max_score += 1.0;
+						// 統一されたレンジを使用
+						double min_score = match_min_score;
+						double max_score = match_max_score;
+						int min_stones = match_min_stones;
+						int max_stones = match_max_stones;
 						
 						// グラフ背景
-						RectF(x, graph_y, squareSize, graph_height).draw(ColorF(0.3, 0.3, 0.3));
+						RectF(x, graph_y, squareSize, graph_height).draw(ColorF(0.4, 0.4, 0.4));
 						
-						// 目盛りを描画（スコア1ごと）
-						int min_tick = (int)std::ceil(min_score);
-						int max_tick = (int)std::floor(max_score);
-						for (int tick = min_tick; tick <= max_tick; ++tick) {
+						// レンジに応じて目盛り間隔を決定
+						double score_range = max_score - min_score;
+						int tick_interval = 1;
+						if (score_range > 48) {
+							tick_interval = 16;
+						} else if (score_range > 24) {
+							tick_interval = 8;
+						} else if (score_range > 12) {
+							tick_interval = 4;
+						} else if (score_range > 6) {
+							tick_interval = 2;
+						}
+						
+						// 目盛りを描画
+						int min_tick = ((int)std::ceil(min_score) / tick_interval) * tick_interval;
+						int max_tick = ((int)std::floor(max_score) / tick_interval) * tick_interval;
+						for (int tick = min_tick; tick <= max_tick; tick += tick_interval) {
 							double tick_y = graph_y + graph_height * (1.0 - (tick - min_score) / (max_score - min_score));
 							// 目盛り線
 							Line(x - 5, tick_y, x, tick_y).draw(1, Palette::White);
@@ -404,8 +436,8 @@ void Main()
 							Line(x, zero_y, x + squareSize, zero_y).draw(1, ColorF(0.5, 0.5, 0.5));
 						}
 						
-						const double line_width = 3.0; // 線の太さ
-						const double white_offset = line_width; // 黒の線幅分だけオフセット
+						const double line_width = 3.0;
+						const double white_offset = line_width;
 						
 						// 白番スコアの線を描画（離れていても繋げる）
 						double prev_white_x = -1, prev_white_y = -1;
