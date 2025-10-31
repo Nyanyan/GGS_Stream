@@ -198,7 +198,7 @@ void Main()
 		if (cols == 0) cols = 1;
 		int rows = 2;
 		int square_horizontal_margin = 200;
-		int square_vertical_margin = 50;
+		int square_vertical_margin = 40;
 		int graph_height = 100; // グラフの高さ
 		int right_margin = 350;
 		int top_margin = 80;
@@ -208,7 +208,7 @@ void Main()
 		double drawable_height = window_size.y - top_margin;
 		double cellWidth = (drawable_width - square_horizontal_margin * cols) / cols;
 		double cellHeight = (drawable_height - square_vertical_margin * (rows + 1) - graph_height * rows) / rows; // グラフ高さを考慮
-		double squareSize = std::min((double)400.0, std::min(cellWidth, cellHeight));
+		double squareSize = std::min(cellWidth, cellHeight);
 
 		// ボードエリアの幅と高さ
 		double boards_total_width = cols * squareSize + cols * square_horizontal_margin;
@@ -348,7 +348,7 @@ void Main()
 					}
 
 					// グラフの描画
-					double graph_y = y + squareSize;
+					double graph_y = y + squareSize + 20; // 20ピクセルのスペースを追加
 					const ScoreHistory& history = score_histories[board_idx];
 					if (history.history.size() >= 2) {
 						// 石数の範囲を計算
@@ -366,11 +366,22 @@ void Main()
 								max_score = std::max(max_score, -white_score);
 							}
 						}
-						min_score -= 2.0;
-						max_score += 2.0;
+						min_score -= 1.0;
+						max_score += 1.0;
 						
 						// グラフ背景
-						RectF(x, graph_y, squareSize, graph_height).draw(ColorF(0.1, 0.1, 0.1));
+						RectF(x, graph_y, squareSize, graph_height).draw(ColorF(0.3, 0.3, 0.3));
+						
+						// 目盛りを描画（スコア1ごと）
+						int min_tick = (int)std::ceil(min_score);
+						int max_tick = (int)std::floor(max_score);
+						for (int tick = min_tick; tick <= max_tick; ++tick) {
+							double tick_y = graph_y + graph_height * (1.0 - (tick - min_score) / (max_score - min_score));
+							// 目盛り線
+							Line(x - 5, tick_y, x, tick_y).draw(1, Palette::White);
+							// 目盛りの数値
+							small_font(Format(tick)).draw(Arg::rightCenter(x - 8, tick_y), Palette::White);
+						}
 						
 						// ゼロライン
 						if (min_score <= 0 && max_score >= 0) {
@@ -378,26 +389,58 @@ void Main()
 							Line(x, zero_y, x + squareSize, zero_y).draw(1, ColorF(0.5, 0.5, 0.5));
 						}
 						
-						// スコア推移を描画
-						for (size_t i = 1; i < history.history.size(); ++i) {
-							auto [stones1, black1, white1] = history.history[i - 1];
-							auto [stones2, black2, white2] = history.history[i];
+						const double black_line_width = 2.0;
+						const double white_offset = black_line_width; // 黒の線幅分だけオフセット
+						
+						// 白番スコアの線を描画（離れていても繋げる）
+						double prev_white_x = -1, prev_white_y = -1;
+						for (size_t i = 0; i < history.history.size(); ++i) {
+							auto [stones, black_score, white_score] = history.history[i];
 							
-							double x1 = x + squareSize * (stones1 - min_stones) / (double)(max_stones - min_stones);
-							double x2 = x + squareSize * (stones2 - min_stones) / (double)(max_stones - min_stones);
+							if (white_score != -127.0) {
+								double point_x = x + squareSize * (stones - min_stones) / (double)(max_stones - min_stones);
+								double point_y = graph_y + graph_height * (1.0 - (-white_score - min_score) / (max_score - min_score)) + white_offset;
+								
+								if (prev_white_x >= 0) {
+									Line(prev_white_x, prev_white_y, point_x, point_y).draw(4, Palette::White);
+								}
+								prev_white_x = point_x;
+								prev_white_y = point_y;
+							}
+						}
+						
+						// 黒番スコアの線を描画（離れていても繋げる）
+						double prev_black_x = -1, prev_black_y = -1;
+						for (size_t i = 0; i < history.history.size(); ++i) {
+							auto [stones, black_score, white_score] = history.history[i];
 							
-							// 黒番スコア
-							if (black1 != -127.0 && black2 != -127.0) {
-								double y1 = graph_y + graph_height * (1.0 - (black1 - min_score) / (max_score - min_score));
-								double y2 = graph_y + graph_height * (1.0 - (black2 - min_score) / (max_score - min_score));
-								Line(x1, y1, x2, y2).draw(2, Palette::Black);
+							if (black_score != -127.0) {
+								double point_x = x + squareSize * (stones - min_stones) / (double)(max_stones - min_stones);
+								double point_y = graph_y + graph_height * (1.0 - (black_score - min_score) / (max_score - min_score));
+								
+								if (prev_black_x >= 0) {
+									Line(prev_black_x, prev_black_y, point_x, point_y).draw(black_line_width, Palette::Black);
+								}
+								prev_black_x = point_x;
+								prev_black_y = point_y;
+							}
+						}
+						
+						// 各データポイントに丸を描画
+						for (size_t i = 0; i < history.history.size(); ++i) {
+							auto [stones, black_score, white_score] = history.history[i];
+							double point_x = x + squareSize * (stones - min_stones) / (double)(max_stones - min_stones);
+							
+							// 白番スコアのポイント（白い丸）
+							if (white_score != -127.0) {
+								double point_y = graph_y + graph_height * (1.0 - (-white_score - min_score) / (max_score - min_score)) + white_offset;
+								Circle(point_x, point_y, 3).draw(Palette::White);
 							}
 							
-							// 白番スコア（反転）
-							if (white1 != -127.0 && white2 != -127.0) {
-								double y1 = graph_y + graph_height * (1.0 - (-white1 - min_score) / (max_score - min_score));
-								double y2 = graph_y + graph_height * (1.0 - (-white2 - min_score) / (max_score - min_score));
-								Line(x1, y1, x2, y2).draw(2, Palette::White);
+							// 黒番スコアのポイント（黒い丸）
+							if (black_score != -127.0) {
+								double point_y = graph_y + graph_height * (1.0 - (black_score - min_score) / (max_score - min_score));
+								Circle(point_x, point_y, 3).draw(Palette::Black);
 							}
 						}
 					}
