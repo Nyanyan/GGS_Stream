@@ -146,6 +146,7 @@ void Main()
 
 				// board info
 				if (ggs_is_board_info(os_info)) {
+					std::cerr << "this is board info" << std::endl;
 					GGS_Board ggs_board = ggs_get_board(server_reply);
 					if (ggs_board.is_valid()) {
 						std::cerr << ggs_board.game_id << std::endl;
@@ -268,8 +269,9 @@ void Main()
 					}
 				}
 			}
-			match_min_score -= 1.0;
-			match_max_score += 1.0;
+			// 整数の範囲に調整
+			match_min_score = std::floor(match_min_score - 0.0001);
+			match_max_score = std::ceil(match_max_score + 0.0001);
 			
 			for (size_t board_idx = 0; board_idx < ggs_boards.size(); ++board_idx) {
 				GGS_Board board = ggs_boards[board_idx];
@@ -409,7 +411,9 @@ void Main()
 						// レンジに応じて目盛り間隔を決定
 						double score_range = max_score - min_score;
 						int tick_interval = 1;
-						if (score_range > 48) {
+						if (score_range > 96) {
+							tick_interval = 32;
+						} else if (score_range > 48) {
 							tick_interval = 16;
 						} else if (score_range > 24) {
 							tick_interval = 8;
@@ -420,14 +424,22 @@ void Main()
 						}
 						
 						// 目盛りを描画
-						int min_tick = ((int)std::ceil(min_score) / tick_interval) * tick_interval;
-						int max_tick = ((int)std::floor(max_score) / tick_interval) * tick_interval;
+						int min_tick = min_score;
+						int max_tick = max_score;
 						for (int tick = min_tick; tick <= max_tick; tick += tick_interval) {
 							double tick_y = graph_y + graph_height * (1.0 - (tick - min_score) / (max_score - min_score));
 							// 目盛り線
 							Line(x - 5, tick_y, x, tick_y).draw(1, Palette::White);
 							// 目盛りの数値
 							small_font(Format(tick)).draw(Arg::rightCenter(x - 8, tick_y), Palette::White);
+						}
+						// max_tickが最後のtickと異なる場合は別途描画
+						if ((max_tick - min_tick) % tick_interval != 0) {
+							double tick_y = graph_y + graph_height * (1.0 - (max_tick - min_score) / (max_score - min_score));
+							// 目盛り線
+							Line(x - 5, tick_y, x, tick_y).draw(1, Palette::White);
+							// 目盛りの数値
+							small_font(Format(max_tick)).draw(Arg::rightCenter(x - 8, tick_y), Palette::White);
 						}
 						
 						// ゼロライン

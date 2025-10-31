@@ -430,14 +430,24 @@ GGS_Board ggs_get_board(std::string str) {
             if (!is_join) {
                 if (line.substr(0, 2) == "| ") {
                     if (words.size() >= 3) {
+						std::cerr << "words " << words[0] << " - " << words[1] << " - " << words[2] << std::endl;
                         if (words[1][words[1].size() - 1] == ':' && words[2].size() >= 2) {
                             res.last_move = get_coord_from_chars(words[2][0], words[2][1]);
 							size_t first_slash = words[2].find('/');
 							size_t second_slash = words[2].find('/', first_slash + 1);
-							if (first_slash != std::string::npos && second_slash != std::string::npos && second_slash > first_slash + 1) {
-								std::string score_str = words[2].substr(first_slash + 1, second_slash - first_slash - 1);
+							std::string score_str;
+							if (first_slash != std::string::npos) {
+								if (second_slash != std::string::npos) {
+									if (second_slash > first_slash + 1) {
+										score_str = words[2].substr(first_slash + 1, second_slash - first_slash - 1);
+									}
+								} else {
+									score_str = words[2].substr(first_slash + 1);
+								}
+								std::cerr << "score calculation: " << words[2] << " -> " << score_str << std::endl;
 								try {
 									res.last_score = std::stod(score_str);
+									std::cerr << "score OK" << std::endl;
 								} catch (...) {
 									res.last_score = -127;
 								}
