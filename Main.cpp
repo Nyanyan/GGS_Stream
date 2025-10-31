@@ -167,7 +167,7 @@ void Main()
 		}
 
 		// Drawing
-		int boards_size = 4; //ggs_boards.size();
+		int boards_size = ggs_boards.size();
 		int cols = (boards_size + 1) / 2;
 		if (cols == 0) cols = 1;
 		int rows = 2;
@@ -212,8 +212,9 @@ void Main()
 			double x = offset_x + col * (squareSize + square_horizontal_margin) + square_horizontal_margin;
 			const std::string& match_id = matches[col];
 			std::vector<std::pair<std::string, int>> total_result;
+			bool both_finished;
 			for (size_t board_idx = 0; board_idx < ggs_boards.size(); ++board_idx) {
-				const auto& board = ggs_boards[board_idx];
+				GGS_Board board = ggs_boards[board_idx];
 				const std::string& gid = board.game_id;
 				size_t first_dot = gid.find('.');
 				if (first_dot == std::string::npos) continue;
@@ -270,6 +271,7 @@ void Main()
 					if (total_result.size() == 0) {
 						total_result.emplace_back(std::make_pair(board.player_black, black_count));
 						total_result.emplace_back(std::make_pair(board.player_white, white_count));
+						both_finished = board.board.is_end();
 					} else {
 						for (auto& result : total_result) {
 							if (result.first == board.player_black) {
@@ -278,6 +280,7 @@ void Main()
 								result.second += white_count;
 							}
 						}
+						both_finished &= board.board.is_end();
 					}
 
 					// ゲームID
@@ -319,10 +322,36 @@ void Main()
 				}
 			}
 			if (!total_result.empty()) {
-				String players = Unicode::Widen(total_result[0].first) + U" vs " + Unicode::Widen(total_result[1].first);
-				font(players).draw(Arg::topCenter(x + squareSize / 2, offset_y + square_vertical_margin - 100), Palette::White);
-				String result = Format(total_result[0].second) + U" - " + Format(total_result[1].second);
-				font(result).draw(Arg::topCenter(x + squareSize / 2, offset_y + square_vertical_margin - 50), Palette::White);
+				String player1 = Unicode::Widen(total_result[0].first);
+				String player2 = Unicode::Widen(total_result[1].first);
+				String vs = U" vs ";
+				font(player1).draw(Arg::topRight(x + squareSize / 2 - font(vs).region().w / 2, offset_y + square_vertical_margin - 100), Palette::White);
+				font(vs).draw(Arg::topCenter(x + squareSize / 2, offset_y + square_vertical_margin - 100), Palette::White);
+				font(player2).draw(Arg::topLeft(x + squareSize / 2 + font(vs).region().w / 2, offset_y + square_vertical_margin - 100), Palette::White);
+				
+				String score1 = Format(total_result[0].second);
+				String score2 = Format(total_result[1].second);
+				String dash = U" - ";
+				font(score1).draw(Arg::topRight(x + squareSize / 2 - font(dash).region().w / 2, offset_y + square_vertical_margin - 50), Palette::White);
+				font(dash).draw(Arg::topCenter(x + squareSize / 2, offset_y + square_vertical_margin - 50), Palette::White);
+				font(score2).draw(Arg::topLeft(x + squareSize / 2 + font(dash).region().w / 2, offset_y + square_vertical_margin - 50), Palette::White);
+				if (both_finished) {
+					if (total_result[0].second > total_result[1].second) {
+						String winner_mark = U"Win ";
+						String loser_mark = U"Loss ";
+						font(winner_mark).draw(Arg::topRight(x + squareSize / 2 - font(dash).region().w / 2 - font(winner_mark).region().w, offset_y + square_vertical_margin - 50), Palette::White);
+						font(loser_mark).draw(Arg::topLeft(x + squareSize / 2 + font(dash).region().w / 2, offset_y + square_vertical_margin - 50), Palette::White);
+					} else if (total_result[1].second > total_result[0].second) {
+						String winner_mark = U"Win ";
+						String loser_mark = U"Loss ";
+						font(loser_mark).draw(Arg::topRight(x + squareSize / 2 - font(dash).region().w / 2 - font(loser_mark).region().w, offset_y + square_vertical_margin - 50), Palette::White);
+						font(winner_mark).draw(Arg::topLeft(x + squareSize / 2 + font(dash).region().w / 2, offset_y + square_vertical_margin - 50), Palette::White);
+					} else {
+						String draw_mark = U"Draw ";
+						font(draw_mark).draw(Arg::topRight(x + squareSize / 2 - font(dash).region().w / 2 - font(draw_mark).region().w, offset_y + square_vertical_margin - 50), Palette::White);
+						font(draw_mark).draw(Arg::topLeft(x + squareSize / 2 + font(dash).region().w / 2, offset_y + square_vertical_margin - 50), Palette::White);
+					}
+				}
 			}
 		}
 
