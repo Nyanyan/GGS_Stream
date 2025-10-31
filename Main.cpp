@@ -1,6 +1,17 @@
 ﻿# include <Siv3D.hpp> // Siv3D v0.6.15
 #include "ggs.hpp"
 
+// スコア履歴を保存する構造体
+struct ScoreHistory {
+	std::vector<std::tuple<int, double, double>> history; // (合計石数, 黒番スコア, 白番スコア)
+	void add(int total_stones, double black_score, double white_score) {
+		history.emplace_back(total_stones, black_score, white_score);
+	}
+	void clear() {
+		history.clear();
+	}
+};
+
 void init_board_processing() {
     bit_init();
     mobility_init();
@@ -41,6 +52,7 @@ void Main()
 	std::vector<std::string> matches = {};
 	std::vector<GGS_Board> ggs_boards;
 	std::vector<std::pair<double, double>> last_scores;
+	std::vector<ScoreHistory> score_histories; // スコア履歴を追加
 	int playing_round = -2;
 	Stopwatch keepalive_timer{ StartImmediately::Yes };
 	std::vector<Rank_Player> rankings;
@@ -96,6 +108,7 @@ void Main()
 					matches.clear();
 					ggs_boards.clear();
 					last_scores.clear();
+					score_histories.clear(); // スコア履歴もクリア
 					ggs_send_message(sock, "ts match\n");
 					ggs_send_message(sock, "t /td r " + tournament_id + "\n");
 				}
@@ -145,19 +158,32 @@ void Main()
 						if (it != ggs_boards.end()) {
 							size_t idx = std::distance(ggs_boards.begin(), it);
 							ggs_boards[idx] = ggs_board;
+							
+							// 合計石数を計算
+							int total_stones = __popcnt64(ggs_board.board.player) + __popcnt64(ggs_board.board.opponent);
+							
 							if (ggs_board.player_to_move == BLACK) {
 								last_scores[idx].second = ggs_board.last_score;
+								score_histories[idx].add(total_stones, last_scores[idx].first, ggs_board.last_score);
 							} else if (ggs_board.player_to_move == WHITE) {
 								last_scores[idx].first = ggs_board.last_score;
+								score_histories[idx].add(total_stones, ggs_board.last_score, last_scores[idx].second);
 							}
 						} else {
 							std::cerr << "emplace back new board " << ggs_board.game_id << std::endl;
 							ggs_boards.emplace_back(ggs_board);
 							last_scores.emplace_back(std::make_pair(-127.0, -127.0));
+							score_histories.emplace_back(ScoreHistory()); // 履歴を初期化
+							
+							// 合計石数を計算
+							int total_stones = __popcnt64(ggs_board.board.player) + __popcnt64(ggs_board.board.opponent);
+							
 							if (ggs_board.player_to_move == BLACK) {
 								last_scores[last_scores.size() - 1].second = ggs_board.last_score;
+								score_histories[score_histories.size() - 1].add(total_stones, -127.0, ggs_board.last_score);
 							} else if (ggs_board.player_to_move == WHITE) {
 								last_scores[last_scores.size() - 1].first = ggs_board.last_score;
+								score_histories[score_histories.size() - 1].add(total_stones, ggs_board.last_score, -127.0);
 							}
 						}
 					}
@@ -173,19 +199,20 @@ void Main()
 		int rows = 2;
 		int square_horizontal_margin = 200;
 		int square_vertical_margin = 50;
+		int graph_height = 100; // グラフの高さ
 		int right_margin = 350;
-		int top_margin = 0;
+		int top_margin = 80;
 
 		// ボード間にマージンだけスペースが空くように計算
 		double drawable_width = window_size.x - right_margin;
 		double drawable_height = window_size.y - top_margin;
 		double cellWidth = (drawable_width - square_horizontal_margin * cols) / cols;
-		double cellHeight = (drawable_height - square_vertical_margin * (rows + 1)) / rows;
+		double cellHeight = (drawable_height - square_vertical_margin * (rows + 1) - graph_height * rows) / rows; // グラフ高さを考慮
 		double squareSize = std::min((double)400.0, std::min(cellWidth, cellHeight));
 
 		// ボードエリアの幅と高さ
 		double boards_total_width = cols * squareSize + cols * square_horizontal_margin;
-		double boards_total_height = rows * squareSize + (rows + 1) * square_vertical_margin;
+		double boards_total_height = rows * (squareSize + graph_height) + (rows + 1) * square_vertical_margin; // グラフ高さを含める
 
 		// 左上のオフセット（中央揃え、右マージン考慮）
 		double offset_x = (drawable_width - boards_total_width) / 2.0;
@@ -195,7 +222,7 @@ void Main()
 			int row = i % 2;
 			int col = i / 2;
 			double x = offset_x + col * (squareSize + square_horizontal_margin) + square_horizontal_margin;
-			double y = offset_y + row * (squareSize + square_vertical_margin) + square_vertical_margin;
+			double y = offset_y + row * (squareSize + square_vertical_margin + graph_height) + square_vertical_margin; // グラフ高さを考慮
 			RectF(x, y, squareSize, squareSize).draw(Palette::Green);
 			// 8x8 grid
 			double cell = squareSize / 8.0;
@@ -223,7 +250,7 @@ void Main()
 				std::string prefix = gid.substr(0, second_dot);
 				if (prefix == match_id) {
 					int row = board.synchro_id;
-					double y = offset_y + row * (squareSize + square_vertical_margin) + square_vertical_margin;
+					double y = offset_y + row * (squareSize + square_vertical_margin + graph_height) + square_vertical_margin; // グラフ高さを考慮
 
 					// 64ビット整数のboard.board.playerを上位ビットから1ビットずつ走査
 					double cell = squareSize / 8.0;
@@ -318,6 +345,61 @@ void Main()
 					if (last_scores[board_idx].second != -127) {
 						String white_score = U"Score: " + Format(last_scores[board_idx].second);
 						small_font(white_score).draw(Arg::topRight(x - 5, y + 180), Palette::White);
+					}
+
+					// グラフの描画
+					double graph_y = y + squareSize;
+					const ScoreHistory& history = score_histories[board_idx];
+					if (history.history.size() >= 2) {
+						// 石数の範囲を計算
+						int min_stones = 64, max_stones = 0;
+						double min_score = 64.0, max_score = -64.0;
+						for (const auto& [stones, black_score, white_score] : history.history) {
+							min_stones = std::min(min_stones, stones);
+							max_stones = std::max(max_stones, stones);
+							if (black_score != -127.0) {
+								min_score = std::min(min_score, black_score);
+								max_score = std::max(max_score, black_score);
+							}
+							if (white_score != -127.0) {
+								min_score = std::min(min_score, -white_score); // 白は反転
+								max_score = std::max(max_score, -white_score);
+							}
+						}
+						min_score -= 2.0;
+						max_score += 2.0;
+						
+						// グラフ背景
+						RectF(x, graph_y, squareSize, graph_height).draw(ColorF(0.1, 0.1, 0.1));
+						
+						// ゼロライン
+						if (min_score <= 0 && max_score >= 0) {
+							double zero_y = graph_y + graph_height * (1.0 - (0.0 - min_score) / (max_score - min_score));
+							Line(x, zero_y, x + squareSize, zero_y).draw(1, ColorF(0.5, 0.5, 0.5));
+						}
+						
+						// スコア推移を描画
+						for (size_t i = 1; i < history.history.size(); ++i) {
+							auto [stones1, black1, white1] = history.history[i - 1];
+							auto [stones2, black2, white2] = history.history[i];
+							
+							double x1 = x + squareSize * (stones1 - min_stones) / (double)(max_stones - min_stones);
+							double x2 = x + squareSize * (stones2 - min_stones) / (double)(max_stones - min_stones);
+							
+							// 黒番スコア
+							if (black1 != -127.0 && black2 != -127.0) {
+								double y1 = graph_y + graph_height * (1.0 - (black1 - min_score) / (max_score - min_score));
+								double y2 = graph_y + graph_height * (1.0 - (black2 - min_score) / (max_score - min_score));
+								Line(x1, y1, x2, y2).draw(2, Palette::Black);
+							}
+							
+							// 白番スコア（反転）
+							if (white1 != -127.0 && white2 != -127.0) {
+								double y1 = graph_y + graph_height * (1.0 - (-white1 - min_score) / (max_score - min_score));
+								double y2 = graph_y + graph_height * (1.0 - (-white2 - min_score) / (max_score - min_score));
+								Line(x1, y1, x2, y2).draw(2, Palette::White);
+							}
+						}
 					}
 				}
 			}
