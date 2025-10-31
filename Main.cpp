@@ -337,19 +337,19 @@ void Main()
 				font(score2).draw(Arg::topLeft(x + squareSize / 2 + font(dash).region().w / 2, offset_y + square_vertical_margin - 50), Palette::White);
 				if (both_finished) {
 					if (total_result[0].second > total_result[1].second) {
-						String winner_mark = U"Win ";
-						String loser_mark = U"Loss ";
-						font(winner_mark).draw(Arg::topRight(x + squareSize / 2 - font(dash).region().w / 2 - font(winner_mark).region().w, offset_y + square_vertical_margin - 50), Palette::White);
-						font(loser_mark).draw(Arg::topLeft(x + squareSize / 2 + font(dash).region().w / 2, offset_y + square_vertical_margin - 50), Palette::White);
+						String winner_mark = U"Win";
+						String loser_mark = U"Loss";
+						font(winner_mark).draw(Arg::topRight(x + squareSize / 2 - 70, offset_y + square_vertical_margin - 50), Palette::White);
+						font(loser_mark).draw(Arg::topLeft(x + squareSize / 2 + 70, offset_y + square_vertical_margin - 50), Palette::White);
 					} else if (total_result[1].second > total_result[0].second) {
-						String winner_mark = U"Win ";
-						String loser_mark = U"Loss ";
-						font(loser_mark).draw(Arg::topRight(x + squareSize / 2 - font(dash).region().w / 2 - font(loser_mark).region().w, offset_y + square_vertical_margin - 50), Palette::White);
-						font(winner_mark).draw(Arg::topLeft(x + squareSize / 2 + font(dash).region().w / 2, offset_y + square_vertical_margin - 50), Palette::White);
+						String winner_mark = U"Win";
+						String loser_mark = U"Loss";
+						font(loser_mark).draw(Arg::topRight(x + squareSize / 2 - 70, offset_y + square_vertical_margin - 50), Palette::White);
+						font(winner_mark).draw(Arg::topLeft(x + squareSize / 2 + 70, offset_y + square_vertical_margin - 50), Palette::White);
 					} else {
-						String draw_mark = U"Draw ";
-						font(draw_mark).draw(Arg::topRight(x + squareSize / 2 - font(dash).region().w / 2 - font(draw_mark).region().w, offset_y + square_vertical_margin - 50), Palette::White);
-						font(draw_mark).draw(Arg::topLeft(x + squareSize / 2 + font(dash).region().w / 2, offset_y + square_vertical_margin - 50), Palette::White);
+						String draw_mark = U"Draw";
+						font(draw_mark).draw(Arg::topRight(x + squareSize / 2 - 70, offset_y + square_vertical_margin - 50), Palette::White);
+						font(draw_mark).draw(Arg::topLeft(x + squareSize / 2 + 70, offset_y + square_vertical_margin - 50), Palette::White);
 					}
 				}
 			}
