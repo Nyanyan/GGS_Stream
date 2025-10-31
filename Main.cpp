@@ -14,8 +14,17 @@ void Main()
 	Window::SetTitle(U"GGS Stream");
 	Scene::SetBackground(Palette::Black);
 
-	std::string username, password;
+	std::string username, password, tournament_id;
 
+	std::ifstream info_file("info.txt");
+	if (info_file.is_open()) {
+		std::getline(info_file, username);
+		std::getline(info_file, password);
+		std::getline(info_file, tournament_id);
+		info_file.close();
+	} else {
+		std::cerr << "Error: Could not open info.txt" << std::endl;
+	}
 
 	Console.open();
 
@@ -86,6 +95,7 @@ void Main()
 					playing_round = round;
 					matches.clear();
 					ggs_boards.clear();
+					last_scores.clear();
 					ggs_send_message(sock, "ts match\n");
 					ggs_send_message(sock, "t /td r " + tournament_id + "\n");
 				}

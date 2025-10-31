@@ -2,3 +2,4 @@ Intermediate
 .vs
 *.vcxproj.user
 App
+App/info.txt
