@@ -12,6 +12,11 @@ struct ScoreHistory {
 	}
 };
 
+// ボード取得時刻を保存する構造体
+struct BoardTimestamp {
+	uint64_t timestamp_ms;
+};
+
 void init_board_processing() {
     bit_init();
     mobility_init();
@@ -53,6 +58,7 @@ void Main()
 	std::vector<GGS_Board> ggs_boards;
 	std::vector<std::pair<double, double>> last_scores;
 	std::vector<ScoreHistory> score_histories; // スコア履歴を追加
+	std::vector<BoardTimestamp> board_timestamps; // ボード取得時刻を追加
 	int playing_round = -2;
 	Stopwatch keepalive_timer{ StartImmediately::Yes };
 	std::vector<Rank_Player> rankings;
@@ -109,6 +115,7 @@ void Main()
 					ggs_boards.clear();
 					last_scores.clear();
 					score_histories.clear(); // スコア履歴もクリア
+					board_timestamps.clear(); // タイムスタンプもクリア
 					ggs_send_message(sock, "ts match\n");
 					ggs_send_message(sock, "t /td r " + tournament_id + "\n");
 				}
@@ -148,6 +155,7 @@ void Main()
 				if (ggs_is_board_info(os_info)) {
 					std::cerr << "this is board info" << std::endl;
 					GGS_Board ggs_board = ggs_get_board(server_reply);
+					uint64_t current_time_ms = tim(); // 取得時刻を記録
 					if (ggs_board.is_valid() && ggs_board.is_synchro) { // synchro game only
 						std::cerr << ggs_board.game_id << std::endl;
 						ggs_board.board.print();
@@ -159,6 +167,7 @@ void Main()
 						if (it != ggs_boards.end()) {
 							size_t idx = std::distance(ggs_boards.begin(), it);
 							ggs_boards[idx] = ggs_board;
+							board_timestamps[idx].timestamp_ms = current_time_ms; // タイムスタンプ更新
 							
 							// 合計石数を計算
 							int total_stones = __popcnt64(ggs_board.board.player) + __popcnt64(ggs_board.board.opponent);
@@ -175,6 +184,7 @@ void Main()
 							ggs_boards.emplace_back(ggs_board);
 							last_scores.emplace_back(std::make_pair(-127.0, -127.0));
 							score_histories.emplace_back(ScoreHistory()); // 履歴を初期化
+							board_timestamps.emplace_back(BoardTimestamp{current_time_ms}); // タイムスタンプを初期化
 							
 							// 合計石数を計算
 							int total_stones = __popcnt64(ggs_board.board.player) + __popcnt64(ggs_board.board.opponent);
@@ -393,7 +403,13 @@ void Main()
 						black_info = U"* " + black_info;
 					}
 					small_font(black_info).draw(Arg::topRight(x - 5, y + 60), Palette::White);
-					uint64_t seconds_black = board.remaining_seconds_black;
+					
+					// 経過時間を計算（秒単位）
+					uint64_t current_time_ms = tim();
+					uint64_t elapsed_ms = current_time_ms - board_timestamps[board_idx].timestamp_ms;
+					uint64_t elapsed_seconds = elapsed_ms / 1000;
+					
+					uint64_t seconds_black = board.remaining_seconds_black > elapsed_seconds ? board.remaining_seconds_black - elapsed_seconds : 0;
 					int minute_black = seconds_black / 60;
 					int minute_second_black = seconds_black - minute_black * 60;
 					String remaining_time_black = U"Remaining " + Format(minute_black) + U":" + Format(minute_second_black).lpadded(2, U'0');
@@ -408,7 +424,7 @@ void Main()
 						white_info = U"* " + white_info;
 					}
 					small_font(white_info).draw(Arg::topRight(x - 5, y + 140), Palette::White);
-					uint64_t seconds_white = board.remaining_seconds_white;
+					uint64_t seconds_white = board.remaining_seconds_white > elapsed_seconds ? board.remaining_seconds_white - elapsed_seconds : 0;
 					int minute_white = seconds_white / 60;
 					int minute_second_white = seconds_white - minute_white * 60;
 					String remaining_time_white = U"Remaining " + Format(minute_white) + U":" + Format(minute_second_white).lpadded(2, U'0');
