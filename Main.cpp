@@ -148,7 +148,7 @@ void Main()
 				if (ggs_is_board_info(os_info)) {
 					std::cerr << "this is board info" << std::endl;
 					GGS_Board ggs_board = ggs_get_board(server_reply);
-					if (ggs_board.is_valid()) {
+					if (ggs_board.is_valid() && ggs_board.is_synchro) { // synchro game only
 						std::cerr << ggs_board.game_id << std::endl;
 						ggs_board.board.print();
 
