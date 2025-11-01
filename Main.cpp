@@ -62,8 +62,8 @@ void Main()
 
 	while (System::Update())
 	{
-		// 1分おきにkeepaliveメッセージを送信
-		if (keepalive_timer.sF() >= 60.0) {
+		// 30秒おきにkeepaliveメッセージを送信
+		if (keepalive_timer.sF() >= 30.0) {
 			// ggs_send_message(sock, "\n");
 			ggs_send_message(sock, "t /td r " + tournament_id + "\n");
 			keepalive_timer.restart();
@@ -565,7 +565,7 @@ void Main()
 		double info_x = window_size.x - right_margin + 30;
 		font(U"Playing Round: " + Format(playing_round)).draw(info_x, 10, Palette::White);
 		double ranking_y = 70;
-		font(U"Ranking").draw(info_x, ranking_y, Palette::White);
+		font(U"Rankings").draw(info_x, ranking_y, Palette::White);
 		for (size_t i = 0; i < rankings.size(); ++i) {
 			// rankings[i]は "名前 勝ち点 w d l" の形式を想定
 			String ranking_info = Format(i + 1) + U". " + Unicode::Widen(rankings[i].name) + U" " + Unicode::Widen(rankings[i].point) + U" points " + Unicode::Widen(rankings[i].wdl);
