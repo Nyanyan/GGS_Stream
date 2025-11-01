@@ -429,7 +429,7 @@ void Main()
 					small_font(white_info).draw(Arg::topRight(x - 5, y + 140), Palette::White);
 					uint64_t seconds_white = board.remaining_seconds_white > elapsed_seconds ? board.remaining_seconds_white - elapsed_seconds : 0;
 					if (board.player_to_move != WHITE) {
-						seconds_black = board.remaining_seconds_black;
+						seconds_white = board.remaining_seconds_black;
 					}
 					int minute_white = seconds_white / 60;
 					int minute_second_white = seconds_white - minute_white * 60;
