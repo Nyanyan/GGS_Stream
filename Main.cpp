@@ -240,6 +240,7 @@ void Main()
 			double x = offset_x + col * (squareSize + square_horizontal_margin) + square_horizontal_margin;
 			const std::string& match_id = matches[col];
 			std::vector<std::pair<std::string, int>> total_result;
+			std::vector<std::pair<std::string, int>> total_score;
 			bool both_finished;
 			
 			// 同じmatch内のボードのスコアレンジを計算
@@ -347,6 +348,15 @@ void Main()
 						total_result.emplace_back(std::make_pair(board.player_black, black_count));
 						total_result.emplace_back(std::make_pair(board.player_white, white_count));
 						both_finished = board.board.is_end();
+						int n_empties = HW2 - black_count - white_count;
+						int black_score = black_count - white_count;
+						if (black_score > 0) {
+							black_score += n_empties;
+						} else if (black_score < 0) {
+							black_score -= n_empties;
+						}
+						total_score.emplace_back(std::make_pair(board.player_black, black_score));
+						total_score.emplace_back(std::make_pair(board.player_white, -black_score));
 					} else {
 						for (auto& result : total_result) {
 							if (result.first == board.player_black) {
@@ -356,8 +366,21 @@ void Main()
 							}
 						}
 						both_finished &= board.board.is_end();
+						int n_empties = HW2 - black_count - white_count;
+						int black_score = black_count - white_count;
+						if (black_score > 0) {
+							black_score += n_empties;
+						} else if (black_score < 0) {
+							black_score -= n_empties;
+						}
+						for (auto& result : total_score) {
+							if (result.first == board.player_black) {
+								result.second += black_score;
+							} else if (result.first == board.player_white) {
+								result.second += -black_score;
+							}
+						}
 					}
-
 					// ゲームID
 					small_font(Unicode::Widen(board.game_id)).draw(Arg::topRight(x - 5, y), Palette::White);
 
@@ -520,12 +543,12 @@ void Main()
 				font(dash).draw(Arg::topCenter(x + squareSize / 2, offset_y + square_vertical_margin - 50), Palette::White);
 				font(score2).draw(Arg::topLeft(x + squareSize / 2 + font(dash).region().w / 2, offset_y + square_vertical_margin - 50), Palette::White);
 				if (both_finished) {
-					if (total_result[0].second > total_result[1].second) {
+					if (total_score[0].second > total_score[1].second) {
 						String winner_mark = U"Win";
 						String loser_mark = U"Loss";
 						font(winner_mark).draw(Arg::topRight(x + squareSize / 2 - 70, offset_y + square_vertical_margin - 50), Palette::White);
 						font(loser_mark).draw(Arg::topLeft(x + squareSize / 2 + 70, offset_y + square_vertical_margin - 50), Palette::White);
-					} else if (total_result[1].second > total_result[0].second) {
+					} else if (total_score[1].second > total_score[0].second) {
 						String winner_mark = U"Win";
 						String loser_mark = U"Loss";
 						font(loser_mark).draw(Arg::topRight(x + squareSize / 2 - 70, offset_y + square_vertical_margin - 50), Palette::White);
