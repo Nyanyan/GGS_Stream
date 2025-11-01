@@ -339,11 +339,26 @@ bool ggs_is_match_info(std::string line) {
 	return words.size() >= 3 && words[0] == "/os:" && words[1] == "match";
 }
 
-std::vector<std::string> ggs_get_match_ids(std::string line) {
+std::vector<std::string> ggs_get_match_ids(std::string line, std::vector<std::string> player_names) {
 	std::vector<std::string> lines = split_by_delimiter(line, "\n");
 	std::vector<std::string> match_ids;
 	for (const auto& l : lines) {
-		if (!l.empty() && l[0] == '|') {
+		std::vector<std::string> words = split_by_space(l);
+		bool contains_both_players = false;
+		if (player_names.size() >= 2) {
+			int found_count = 0;
+			for (const auto& word : words) {
+				for (const auto& player : player_names) {
+					if (word == player) {
+						found_count++;
+						break;
+					}
+				}
+				if (found_count >= 2) break;
+			}
+			contains_both_players = (found_count >= 2);
+		}
+		if (contains_both_players && !l.empty() && l[0] == '|') {
 			std::vector<std::string> words = split_by_space(l);
 			if (words.size() > 1) {
 				match_ids.push_back(words[1]);

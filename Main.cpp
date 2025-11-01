@@ -62,6 +62,7 @@ void Main()
 	int playing_round = -2;
 	Stopwatch keepalive_timer{ StartImmediately::Yes };
 	std::vector<Rank_Player> rankings;
+	std::vector<std::string> player_names;
 
 	ggs_send_message(sock, "t /td r " + tournament_id + "\n");
 	ggs_send_message(sock, "ts match\n");
@@ -143,12 +144,18 @@ void Main()
 
 				// match info
 				if (ggs_is_match_info(server_reply)) {
-					matches = ggs_get_match_ids(server_reply);
+					matches = ggs_get_match_ids(server_reply, player_names);
 				}
 
 				// tournament rankings
 				if (ggs_is_ranking(server_reply, tournament_id)) {
 					rankings = ggs_client_get_ranking(server_reply, tournament_id);
+					// プレイヤー名のリストを作成
+					player_names.clear();
+					for (const auto& rank_player : rankings) {
+						player_names.push_back(rank_player.name);
+					}
+					ggs_send_message(sock, "ts match\n");
 				}
 
 				// board info
@@ -199,7 +206,6 @@ void Main()
 						}
 					}
 				}
-
 			}
 		}
 
