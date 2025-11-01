@@ -449,7 +449,8 @@ GGS_Board ggs_get_board(std::string str) {
 									res.last_score = -127;
 								}
 							} else {
-								res.last_score = -127;
+								// res.last_score = -127;
+								res.last_score = 0;
 							}
 							continue;
                         }
