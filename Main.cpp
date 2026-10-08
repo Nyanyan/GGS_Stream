@@ -172,6 +172,7 @@ void Main()
         const Font font{ FontMethod::MSDF, 48, Typeface::Bold };
         while (System::Update()) {
             font(Unicode::FromUTF8(cfg.error)).draw(28, Rect{ 160, 400, 1600, 400 }, view::col::loss);
+            if (cfg.quit_after > 0 && Scene::Time() >= cfg.quit_after) System::Exit();
         }
         return;
     }
