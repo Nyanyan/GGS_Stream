@@ -177,6 +177,8 @@ struct AppInfo {
     String connection;
     bool debug = false;
     int focus = -1; // index of the match shown alone, -1: all matches
+    String toast;   // short notice for the operator
+    uint64_t toast_until_ms = 0;
 };
 
 class StreamView {
@@ -317,7 +319,9 @@ private:
         double rx = SCENE_W - MARGIN;
         RectF clock = mono(heavy, digit_ratio_heavy, DateTime::Now().format(U"HH:mm"), 32, Align::Right, Vec2{ rx, cy }, col::text);
         rx = clock.x - 28;
-        if (!info.online) {
+        if (now < info.toast_until_ms) {
+            text(bold, info.toast, 20, Align::Right, Vec2{ rx, cy }, col::warn);
+        } else if (!info.online) {
             text(bold, U"OFFLINE: " + info.connection, 18, Align::Right, Vec2{ rx, cy }, col::loss, 560);
         } else if (!t.matches.empty() && (t.status == RoundStatus::Playing || t.status == RoundStatus::Break)) {
             text(bold, U"FINISHED {} / {}"_fmt(t.finished_matches(), t.matches.size()), 20, Align::Right, Vec2{ rx, cy }, col::sub);

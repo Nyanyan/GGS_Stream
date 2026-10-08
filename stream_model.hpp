@@ -302,6 +302,7 @@ struct TournamentView {
     int next_round = -1;            // round of next_pairings
     std::vector<ggs::Pairing> next_pairings;
     std::map<std::string, int> rank_at_round_start;
+    uint64_t move_events = 0;       // number of moves received live (for the move sound)
 
     // > 0: moved up since the round started, < 0: moved down
     int rank_change(const std::string& name, int rank) const {
@@ -845,6 +846,7 @@ private:
             g.prev_pos = g.pos;
             g.has_prev = true;
             g.changed_ms = now;
+            ++t.move_events;
         }
         g.pos = server_pos;
         g.ply = mv.ply;

@@ -22,6 +22,7 @@
         --title TEXT        title shown on the stream
         --fullscreen        start in fullscreen
         --focus N           start with match N shown alone (keys 1-9 / 0 while running)
+        --sound             play a sound on every move (key S while running)
         --capture PREFIX    save screenshots as PREFIX_<sec>.png ...
         --capture-at A,B,C  ... at these times in seconds
         --quit-after SEC    exit automatically
@@ -37,6 +38,7 @@ struct Config {
     uint64_t demo_seed = 0;
     bool fullscreen = false;
     int focus = -1;
+    bool sound = false;
     std::string capture_prefix;
     std::vector<double> capture_at;
     double quit_after = -1.0;
@@ -56,6 +58,7 @@ static Config load_config() {
         else if (a == U"--seed") cfg.demo_seed = ParseOr<uint64>(Unicode::FromUTF8(next()), 0);
         else if (a == U"--title") cfg.title = next();
         else if (a == U"--fullscreen") cfg.fullscreen = true;
+        else if (a == U"--sound") cfg.sound = true;
         else if (a == U"--focus") cfg.focus = ParseOr<int32>(Unicode::FromUTF8(next()), 0) - 1;
         else if (a == U"--capture") cfg.capture_prefix = next();
         else if (a == U"--capture-at") {
@@ -171,6 +174,13 @@ void Main()
     state.send = [&](const std::string& cmd) { source->send(cmd); };
     state.log = [](const std::string& s) { app_log().write("STATE", s); };
 
+    const Audio move_sound{ GMInstrument::Woodblock, 76, 0.25s };
+    bool sound = cfg.sound;
+    if (sound) {
+        info.toast = U"SOUND ON";
+        info.toast_until_ms = tim() + 3000;
+    }
+    uint64_t seen_moves = 0;
     int seen_epoch = 0;
     int focus_round = -1;
     bool was_online = false;
@@ -192,6 +202,15 @@ void Main()
         state.tick(now);
 
         if (KeyF1.down()) info.debug = !info.debug;
+        if (KeyS.down()) {
+            sound = !sound;
+            info.toast = sound ? U"SOUND ON" : U"SOUND OFF";
+            info.toast_until_ms = now + 1500;
+        }
+        if (state.t.move_events != seen_moves) {
+            if (sound) move_sound.playOneShot(0.6);
+            seen_moves = state.t.move_events;
+        }
         // 1-9: show one match large, 0: all matches (podium after the tournament)
         const Input digit_keys[10] = { Key0, Key1, Key2, Key3, Key4, Key5, Key6, Key7, Key8, Key9 };
         const Input numpad_keys[10] = { KeyNum0, KeyNum1, KeyNum2, KeyNum3, KeyNum4, KeyNum5, KeyNum6, KeyNum7, KeyNum8, KeyNum9 };
