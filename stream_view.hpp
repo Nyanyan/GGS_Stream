@@ -659,7 +659,9 @@ private:
         const ColorF& board_color = f.active ? col::board_replay : col::board;
         const ColorF& grid_color = f.active ? col::grid_replay : col::grid;
         r.draw(f.active ? col::replay : col::board_frame);
-        double fr = Max(4.0, w * 0.028);
+        // coordinates only when the board is large enough to show them at a readable size
+        const bool coords = w >= 460;
+        double fr = coords ? Max(24.0, w * 0.042) : Max(4.0, w * 0.028);
         RectF gr = r.stretched(-fr);
         gr.draw(board_color);
         double cell = gr.w / HW;
@@ -670,6 +672,14 @@ private:
         }
         for (int sy : { 2, 6 }) {
             for (int sx : { 2, 6 }) Circle{ gr.x + sx * cell, gr.y + sy * cell, Max(1.5, cell * 0.06) }.draw(grid_color);
+        }
+        if (coords) {
+            double size = Max(MIN_TEXT, fr * 0.62);
+            ColorF c = f.active ? ColorF{ col::bg, 0.8 } : ColorF{ 1.0, 0.55 };
+            for (int i = 0; i < HW; ++i) {
+                medium(String(1, U'a' + i)).draw(size, Arg::center = Vec2{ gr.x + (i + 0.5) * cell, r.y + fr / 2 }, c);
+                medium(String(1, U'1' + i)).draw(size, Arg::center = Vec2{ r.x + fr / 2, gr.y + (i + 0.5) * cell }, c);
+            }
         }
         if (!g.active) return;
 
