@@ -215,17 +215,25 @@ private:
     /*
         text helpers
     */
-    static double fit(const Font& font, const String& s, double size, double max_w) {
-        if (max_w > 0) {
-            double w = font(s).region(size).w;
-            if (w > max_w) size *= max_w / w;
+    // shrink the text to max_w, but not below MIN_TEXT; longer texts are cut with an ellipsis
+    static String fit(const Font& font, const String& s, double& size, double max_w) {
+        if (max_w <= 0) return s;
+        double w = font(s).region(size).w;
+        if (w <= max_w) return s;
+        double smallest = Min(size, MIN_TEXT);
+        if (size * max_w / w >= smallest) {
+            size *= max_w / w;
+            return s;
         }
-        return size;
+        size = smallest;
+        String cut = s;
+        while (cut.size() > 1 && font(cut + U"\u2026").region(size).w > max_w) cut.pop_back();
+        return cut + U"\u2026";
     }
 
-    static RectF text(const Font& font, const String& s, double size, Align align, const Vec2& p, const ColorF& color, double max_w = 0) {
-        if (s.isEmpty()) return RectF{ p, 0, 0 };
-        size = fit(font, s, size, max_w);
+    static RectF text(const Font& font, const String& str, double size, Align align, const Vec2& p, const ColorF& color, double max_w = 0) {
+        if (str.isEmpty()) return RectF{ p, 0, 0 };
+        const String s = fit(font, str, size, max_w);
         switch (align) {
         case Align::Left: return font(s).draw(size, Arg::leftCenter = p, color);
         case Align::Center: return font(s).draw(size, Arg::center = p, color);
