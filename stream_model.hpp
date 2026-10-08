@@ -524,7 +524,7 @@ private:
             if (info.rounds_total > 0) t.round = info.rounds_total;
         } else if (info.playing && info.current_round > 0) {
             if (t.round != info.current_round || t.status != RoundStatus::Playing) {
-                if (t.round != info.current_round) t.matches.clear();
+                if (t.round != -1 && t.round != info.current_round) t.matches.clear();
                 t.round = info.current_round;
                 t.status = RoundStatus::Playing;
                 schedule_match_list(now, 0);
