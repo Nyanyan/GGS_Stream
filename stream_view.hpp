@@ -463,13 +463,12 @@ private:
         return PlayerStyle{ idx >= 0 ? col::accent[idx] : col::text, g.active && !g.finished && g.pos.to_move == color };
     }
 
-    // result of the game for the player with this color: "WIN +6" etc.
-    void draw_game_result(const GameView& g, int color, double size, Align a, const Vec2& p) {
+    // final score of one game for the player with this color ("+6")
+    // win / loss is decided only by the sum of both games, so it is not shown per game
+    void draw_game_score(const GameView& g, int color, double size, Align a, const Vec2& p) {
         double r_black = g.final_result_black();
         double mine = color == BLACK ? r_black : -r_black;
-        String label = mine > 0 ? U"WIN " + format_signed(mine) : mine < 0 ? U"LOSS " + format_signed(mine) : U"DRAW";
-        ColorF c = mine > 0 ? col::win : mine < 0 ? col::loss : col::draw;
-        text(heavy, label, size, a, p, c);
+        text(heavy, format_signed(mine), size, a, p, col::text);
     }
 
     /*
@@ -500,7 +499,7 @@ private:
             mono(heavy, digit_ratio_heavy, U"{}"_fmt(g.discs(color)), 48 * s, Align::Left, Vec2{ x - 2 * s, h.y + h.h * 0.47 }, col::text);
             double y_clock = h.y + h.h * 0.76;
             if (g.finished) {
-                draw_game_result(g, color, fs(19 * s), Align::Left, Vec2{ x, y_clock });
+                draw_game_score(g, color, fs(23 * s), Align::Left, Vec2{ x, y_clock });
             } else if (g.has_clock) {
                 int sec = g.remaining_seconds(color, now);
                 ColorF cc = sec <= 60 ? col::loss : sec <= 180 ? col::warn : st.to_move ? col::text : col::sub;
@@ -541,7 +540,7 @@ private:
                 mono(heavy, digit_ratio_heavy, U"{}"_fmt(g.discs(color)), fs(26 * s), b, Vec2{ inner, y2 }, col::text);
             }
             if (g.finished) {
-                draw_game_result(g, color, fs(16 * s), a, Vec2{ edge, y2 });
+                draw_game_score(g, color, fs(19 * s), a, Vec2{ edge, y2 });
             } else if (g.has_clock) {
                 int sec = g.remaining_seconds(color, now);
                 ColorF cc = sec <= 60 ? col::loss : sec <= 180 ? col::warn : st.to_move ? col::text : col::sub;
