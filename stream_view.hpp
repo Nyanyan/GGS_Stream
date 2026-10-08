@@ -186,8 +186,12 @@ class StreamView {
     Font cjk{ FontMethod::MSDF, 48, Typeface::CJK_Regular_JP };
     double digit_ratio_heavy = 0.6;
     double digit_ratio_bold = 0.6;
+    std::map<std::string, String> display_names; // GGS login -> name shown on the stream
 
 public:
+    void set_display_names(std::map<std::string, String> names) {
+        display_names = std::move(names);
+    }
     StreamView() {
         heavy.addFallback(cjk);
         bold.addFallback(cjk);
@@ -212,6 +216,11 @@ public:
     }
 
 private:
+    String player_name(const std::string& login) const {
+        auto it = display_names.find(login);
+        return it == display_names.end() ? widen(login) : it->second;
+    }
+
     /*
         text helpers
     */
@@ -346,9 +355,9 @@ private:
         for (size_t i = 0; i < t.next_pairings.size(); ++i) {
             const auto& p = t.next_pairings[i];
             double cy = y + rh * (i + 0.5);
-            text(bold, widen(p.player[0]), size, Align::Right, Vec2{ cx - 20, cy }, col::text, cx - 20 - x0);
+            text(bold, player_name(p.player[0]), size, Align::Right, Vec2{ cx - 20, cy }, col::text, cx - 20 - x0);
             text(medium, U"vs", size * 0.85, Align::Center, Vec2{ cx, cy }, col::faint);
-            text(bold, widen(p.player[1]), size, Align::Left, Vec2{ cx + 20, cy }, col::text, x1 - cx - 20);
+            text(bold, player_name(p.player[1]), size, Align::Left, Vec2{ cx + 20, cy }, col::text, x1 - cx - 20);
         }
     }
 
@@ -391,7 +400,7 @@ private:
                 if (move > 0) Triangle{ Vec2{ c_move, cy - a }, Vec2{ c_move + a, cy + a * 0.8 }, Vec2{ c_move - a, cy + a * 0.8 } }.draw(col::win);
                 else Triangle{ Vec2{ c_move, cy + a }, Vec2{ c_move - a, cy - a * 0.8 }, Vec2{ c_move + a, cy - a * 0.8 } }.draw(col::loss);
             }
-            text(bold, widen(e.row.name), size, Align::Left, Vec2{ c_name, cy }, col::text, c_pts - 24 - c_name);
+            text(bold, player_name(e.row.name), size, Align::Left, Vec2{ c_name, cy }, col::text, c_pts - 24 - c_name);
             text(heavy, format_points(e.row.points), size, Align::Center, Vec2{ c_pts, cy }, col::text);
             if (e.row.has_record) {
                 text(medium, U"{}-{}-{}"_fmt(e.row.win, e.row.draw, e.row.loss), size * 0.92, Align::Center, Vec2{ c_wdl, cy }, col::sub, 82);
@@ -425,7 +434,7 @@ private:
             block.draw(colors[i]);
             text(heavy, U"{}"_fmt(e.rank), 110, Align::Center, Vec2{ block.centerX(), block.y + 80 }, col::bg);
             double y = block.y - 150;
-            text(heavy, widen(e.row.name), 48, Align::Center, Vec2{ block.centerX(), y }, col::text, cw);
+            text(heavy, player_name(e.row.name), 48, Align::Center, Vec2{ block.centerX(), y }, col::text, cw);
             text(heavy, format_points(e.row.points) + U" pts", 30, Align::Center, Vec2{ block.centerX(), y + 56 }, colors[i]);
             String detail;
             if (e.row.has_record) detail += U"{}-{}-{}"_fmt(e.row.win, e.row.draw, e.row.loss);
@@ -517,7 +526,7 @@ private:
             double dir = left ? 1 : -1;
             Align a = left ? Align::Left : Align::Right;
             RectF{ left ? r.x : r.rightX() - 4 * s, y1 - 15 * s, 4 * s, 30 * s }.draw(col::accent[i]);
-            text(heavy, widen(m.player[i]), fs(26 * s), a, Vec2{ edge + dir * 14 * s, y1 }, col::accent[i], name_w);
+            text(heavy, player_name(m.player[i]), fs(26 * s), a, Vec2{ edge + dir * 14 * s, y1 }, col::accent[i], name_w);
             if (has_result) {
                 double mine = i == 0 ? result : -result;
                 String label = mine > 0 ? U"WIN" : mine < 0 ? U"LOSS" : U"DRAW";
@@ -579,7 +588,7 @@ private:
             disc(Vec2{ x + dr, y_name }, dr, color);
             double name_x = x + dr * 2 + 8 * s;
             if (!g.active) continue;
-            text(bold, widen(g.name[color]), fs(19 * s), Align::Left, Vec2{ name_x, y_name }, st.accent, h.rightX() - 10 * s - name_x);
+            text(bold, player_name(g.name[color]), fs(19 * s), Align::Left, Vec2{ name_x, y_name }, st.accent, h.rightX() - 10 * s - name_x);
             mono(heavy, digit_ratio_heavy, U"{}"_fmt(g.discs(color)), 48 * s, Align::Left, Vec2{ x - 2 * s, h.y + h.h * 0.47 }, col::text);
             double y_clock = h.y + h.h * 0.76;
             if (g.finished) {
@@ -619,7 +628,7 @@ private:
             disc(Vec2{ edge + dir * dr, y1 }, dr, color);
             if (!g.active) continue;
             double name_x = edge + dir * (dr * 2 + 6 * s);
-            text(bold, widen(g.name[color]), fs(18 * s), a, Vec2{ name_x, y1 }, st.accent, std::abs(inner - name_x));
+            text(bold, player_name(g.name[color]), fs(18 * s), a, Vec2{ name_x, y1 }, st.accent, std::abs(inner - name_x));
             if (!f.active) {
                 mono(heavy, digit_ratio_heavy, U"{}"_fmt(g.discs(color)), fs(26 * s), b, Vec2{ inner, y2 }, col::text);
             }

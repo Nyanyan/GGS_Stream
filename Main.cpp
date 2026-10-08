@@ -89,6 +89,29 @@ static Config load_config() {
     return cfg;
 }
 
+/*
+    names.txt (optional, next to the executable): display names for GGS logins
+        <login> <name shown on the stream>
+        # comment
+*/
+static std::map<std::string, String> load_display_names() {
+    std::map<std::string, String> res;
+    std::ifstream ifs("names.txt");
+    std::string line;
+    bool first = true;
+    while (std::getline(ifs, line)) {
+        if (first && ggs::starts_with(line, "\xEF\xBB\xBF")) line.erase(0, 3); // UTF-8 BOM
+        first = false;
+        line = ggs::trim(line);
+        if (line.empty() || line[0] == '#') continue;
+        size_t sp = line.find_first_of(" \t");
+        if (sp == std::string::npos) continue;
+        std::string name = ggs::trim(line.substr(sp + 1));
+        if (!name.empty()) res[line.substr(0, sp)] = Unicode::FromUTF8(name);
+    }
+    return res;
+}
+
 static void setup_window() {
     Window::SetTitle(U"GGS Stream");
     System::SetTerminationTriggers(UserAction::CloseButtonClicked); // Esc must not end the stream
@@ -119,6 +142,7 @@ void Main()
     if (cfg.fullscreen) Window::SetFullscreen(true);
 
     view::StreamView view;
+    view.set_display_names(load_display_names());
     view::AppInfo info;
     info.title = Unicode::FromUTF8(cfg.title);
     info.demo = cfg.demo;
