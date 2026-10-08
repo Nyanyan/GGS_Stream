@@ -172,7 +172,7 @@ inline GridLayout solve_layout(int n, double area_w, double area_h) {
 
 struct AppInfo {
     String title;
-    bool demo = false;
+    String badge; // "DEMO", "LOG REPLAY"
     bool online = false;
     String connection;
     bool debug = false;
@@ -288,8 +288,8 @@ private:
         double x = MARGIN + 4;
         RectF title = text(heavy, info.title, 32, Align::Left, Vec2{ x, cy }, col::text, 820);
         x = title.rightX() + 28;
-        if (info.demo) {
-            x = text(bold, U"DEMO", 18, Align::Left, Vec2{ x, cy }, col::demo).rightX() + 24;
+        if (!info.badge.isEmpty()) {
+            x = text(bold, info.badge, 18, Align::Left, Vec2{ x, cy }, col::demo).rightX() + 24;
         }
         String round_label = t.round > 0 ? (t.rounds_total > 0 ? U"ROUND {} / {}"_fmt(t.round, t.rounds_total) : U"ROUND {}"_fmt(t.round)) : U"";
         switch (t.status) {

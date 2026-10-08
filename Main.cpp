@@ -1,6 +1,7 @@
 # include <Siv3D.hpp> // Siv3D v0.6.15
 #include "board.hpp"
 #include "ggs_net.hpp"
+#include "log_replay.hpp"
 #include "stream_model.hpp"
 #include "stream_view.hpp"
 
@@ -17,7 +18,9 @@
     command line options
         --demo              run an offline simulation instead of connecting to GGS
         --players N         number of players in the demo (even, default 6)
-        --speed X           demo speed (default 3)
+        --replay LOG        replay a log in logs/ instead of connecting to GGS
+        --tournament ID     tournament id (overrides info.txt, for --replay)
+        --speed X           demo / replay speed (default 3 / 1)
         --seed N            demo random seed
         --title TEXT        title shown on the stream
         --fullscreen        start in fullscreen
@@ -34,7 +37,8 @@ struct Config {
     std::string title;
     bool demo = false;
     int demo_players = 6;
-    double demo_speed = 3.0;
+    std::string replay_path;
+    double speed = -1.0; // default depends on the mode
     uint64_t demo_seed = 0;
     bool fullscreen = false;
     int focus = -1;
@@ -54,7 +58,9 @@ static Config load_config() {
         auto next = [&]() -> std::string { return i + 1 < args.size() ? args[++i].toUTF8() : std::string(); };
         if (a == U"--demo") cfg.demo = true;
         else if (a == U"--players") cfg.demo_players = ParseOr<int32>(Unicode::FromUTF8(next()), 6);
-        else if (a == U"--speed") cfg.demo_speed = ParseOr<double>(Unicode::FromUTF8(next()), 3.0);
+        else if (a == U"--replay") cfg.replay_path = next();
+        else if (a == U"--tournament") cfg.tournament_id = next();
+        else if (a == U"--speed") cfg.speed = ParseOr<double>(Unicode::FromUTF8(next()), -1.0);
         else if (a == U"--seed") cfg.demo_seed = ParseOr<uint64>(Unicode::FromUTF8(next()), 0);
         else if (a == U"--title") cfg.title = next();
         else if (a == U"--fullscreen") cfg.fullscreen = true;
@@ -68,11 +74,19 @@ static Config load_config() {
     if (cfg.demo) {
         cfg.tournament_id = "7";
         if (cfg.title.empty()) cfg.title = "GGS Synchro Tournament";
+        if (cfg.speed <= 0) cfg.speed = 3.0;
         return cfg;
     }
+    const bool replay = !cfg.replay_path.empty();
+    if (replay && cfg.speed <= 0) cfg.speed = 1.0;
     std::ifstream ifs("info.txt");
     if (!ifs) {
-        cfg.error = "info.txt not found. Put username, password and tournament id (one per line) in info.txt, or start with --demo.";
+        if (replay && !cfg.tournament_id.empty()) {
+            if (cfg.title.empty()) cfg.title = "GGS Tournament " + cfg.tournament_id;
+            return cfg;
+        }
+        cfg.error = replay ? "info.txt not found. Give the tournament id with --tournament."
+                           : "info.txt not found. Put username, password and tournament id (one per line) in info.txt, or start with --demo.";
         return cfg;
     }
     std::string lines[4];
@@ -83,10 +97,12 @@ static Config load_config() {
     }
     cfg.username = lines[0];
     cfg.password = lines[1];
-    cfg.tournament_id = lines[2];
+    if (cfg.tournament_id.empty()) cfg.tournament_id = lines[2];
     if (cfg.title.empty()) cfg.title = lines[3];
-    if (cfg.username.empty() || cfg.password.empty() || cfg.tournament_id.empty()) {
+    if (!replay && (cfg.username.empty() || cfg.password.empty() || cfg.tournament_id.empty())) {
         cfg.error = "info.txt must contain username, password and tournament id (one per line).";
+    } else if (replay && cfg.tournament_id.empty()) {
+        cfg.error = "Give the tournament id with --tournament or in info.txt.";
     }
     if (cfg.title.empty()) cfg.title = "GGS Tournament " + cfg.tournament_id;
     return cfg;
@@ -148,7 +164,7 @@ void Main()
     view.set_display_names(load_display_names());
     view::AppInfo info;
     info.title = Unicode::FromUTF8(cfg.title);
-    info.demo = cfg.demo;
+    info.badge = cfg.demo ? U"DEMO" : !cfg.replay_path.empty() ? U"LOG REPLAY" : U"";
     info.focus = cfg.focus;
 
     if (!cfg.error.empty()) {
@@ -162,7 +178,11 @@ void Main()
 
     std::unique_ptr<MessageSource> source;
     if (cfg.demo) {
-        source = std::make_unique<DemoSource>(cfg.demo_players, cfg.demo_speed, cfg.tournament_id, cfg.demo_seed, tim());
+        source = std::make_unique<DemoSource>(cfg.demo_players, cfg.speed, cfg.tournament_id, cfg.demo_seed, tim());
+    } else if (!cfg.replay_path.empty()) {
+        auto replay = std::make_unique<LogReplaySource>(cfg.replay_path, cfg.speed, tim());
+        if (replay->empty()) app_log().write("ERROR", "no received messages in " + cfg.replay_path);
+        source = std::move(replay);
     } else {
         auto conn = std::make_unique<GGSConnection>(GGS_HOST, GGS_PORT, cfg.username, cfg.password,
             std::vector<std::string>{ "ms /os", "ts client -", "ts vt100 -", "chann + .tourney", "chann + /os" });

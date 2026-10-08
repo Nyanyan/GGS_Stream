@@ -9,6 +9,8 @@
 #include "../board.hpp"
 #include "../stream_model.hpp"
 #include "../demo_server.hpp"
+#include "../log_replay.hpp"
+#include <cstdio>
 
 static int failures = 0;
 
@@ -178,6 +180,62 @@ static void test_real_rankings() {
     }
 }
 
+static void test_log_replay() {
+    std::string tag;
+    LogLine l;
+    CHECK(parse_log_line("23:59:59.250 RECV |  1: f5/1.00", tag, l) && tag == "RECV" && l.text == "|  1: f5/1.00" && l.t_ms == 86399250);
+    CHECK(parse_log_line("00:00:01.000 SEND ts match", tag, l) && tag == "SEND");
+    CHECK(!parse_log_line("garbage", tag, l));
+
+    // log a simulated tournament in the AppLog format, then replay it
+    char path[L_tmpnam_s];
+    tmpnam_s(path, sizeof(path));
+    demo::DemoServer server(4, 40.0, "9", 11);
+    stream::StreamState live("9");
+    live.send = [&](const std::string& s) { server.send(s); };
+    std::ofstream ofs(path);
+    uint64_t now = 23 * 3600 * 1000ULL + 59 * 60 * 1000ULL; // crosses midnight
+    server.start(now);
+    live.on_connected(now);
+    for (int step = 0; step < 4000 && live.t.status != stream::RoundStatus::Over; ++step) {
+        now += 50;
+        for (const auto& m : server.poll(now)) {
+            live.on_message(m, now);
+            uint64_t t = now % (24 * 3600 * 1000ULL);
+            char ts[32];
+            std::snprintf(ts, sizeof(ts), "%02d:%02d:%02d.%03d", (int)(t / 3600000), (int)(t / 60000 % 60), (int)(t / 1000 % 60), (int)(t % 1000));
+            std::string text = m.text();
+            size_t start = 0;
+            while (true) {
+                size_t nl = text.find('\n', start);
+                ofs << ts << " RECV " << text.substr(start, nl == std::string::npos ? std::string::npos : nl - start) << '\n';
+                if (nl == std::string::npos) break;
+                start = nl + 1;
+            }
+            ofs << ts << " SEND ts match\n";
+        }
+        live.tick(now);
+    }
+    ofs.close();
+    CHECK(live.t.status == stream::RoundStatus::Over);
+
+    LogReplaySource replay(path, 1000.0, 0);
+    CHECK(!replay.empty());
+    stream::StreamState st("9");
+    st.send = [&](const std::string& s) { replay.send(s); };
+    st.on_connected(0);
+    for (uint64_t t = 0; t < 600000; t += 50) {
+        for (const auto& m : replay.poll(t)) st.on_message(m, t);
+        st.tick(t);
+    }
+    CHECK(st.t.status == stream::RoundStatus::Over);
+    CHECK(st.t.rankings.size() == live.t.rankings.size());
+    for (size_t i = 0; i < st.t.rankings.size() && i < live.t.rankings.size(); ++i) {
+        CHECK(st.t.rankings[i].row.name == live.t.rankings[i].row.name && st.t.rankings[i].row.points == live.t.rankings[i].row.points);
+    }
+    std::remove(path);
+}
+
 static void run_simulation(int n_players, uint64_t seed) {
     demo::DemoServer server(n_players, 40.0, "9", seed);
     stream::StreamState st("9");
@@ -252,6 +310,7 @@ int main() {
     test_parsers();
     test_forced_eval();
     test_real_rankings();
+    test_log_replay();
     run_simulation(6, 1);
     run_simulation(4, 2);
     run_simulation(8, 3);
