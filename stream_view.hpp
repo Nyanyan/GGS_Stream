@@ -199,7 +199,7 @@ public:
         RectF{ 0, 0, SCENE_W, SCENE_H }.draw(col::bg);
         draw_header(t, info, now);
         RectF sidebar{ SCENE_W - MARGIN - SIDEBAR_W, HEADER_H + 20, SIDEBAR_W, SCENE_H - HEADER_H - 20 - MARGIN };
-        draw_standings(t, sidebar);
+        draw_sidebar(t, sidebar);
         RectF main{ MARGIN, HEADER_H + 20, sidebar.x - MARGIN - 20, SCENE_H - HEADER_H - 20 - MARGIN };
         draw_matches(t, main, now);
         if (info.debug) draw_debug(t, info);
@@ -304,9 +304,41 @@ private:
     /*
         standings sidebar
     */
-    void draw_standings(const TournamentView& t, const RectF& r) {
+    void draw_sidebar(const TournamentView& t, const RectF& r) {
         r.draw(col::panel);
         r.drawFrame(1, 0, col::border);
+        RectF standings = r;
+        if (t.status == RoundStatus::Break && !t.next_pairings.empty()) {
+            double h = Min(66 + 34.0 * t.next_pairings.size(), r.h * 0.5);
+            standings.h -= h;
+            draw_pairings(t, RectF{ r.x, standings.bottomY(), r.w, h });
+        }
+        draw_standings(t, standings);
+    }
+
+    /*
+        pairings of the next round, shown during a break
+    */
+    void draw_pairings(const TournamentView& t, const RectF& r) {
+        double x0 = r.x + 20, x1 = r.rightX() - 20;
+        RectF{ x0, r.y, x1 - x0, 1 }.draw(col::border);
+        double y = r.y + 30;
+        text(heavy, U"NEXT ROUND", 22, Align::Left, Vec2{ x0, y }, col::text);
+        text(bold, U"ROUND {}"_fmt(t.next_round), 16, Align::Right, Vec2{ x1, y }, col::sub);
+        y += 22;
+        double rh = Min(34.0, (r.bottomY() - 8 - y) / t.next_pairings.size());
+        double size = Clamp(rh * 0.58, MIN_TEXT, 20.0);
+        double cx = r.centerX();
+        for (size_t i = 0; i < t.next_pairings.size(); ++i) {
+            const auto& p = t.next_pairings[i];
+            double cy = y + rh * (i + 0.5);
+            text(bold, widen(p.player[0]), size, Align::Right, Vec2{ cx - 20, cy }, col::text, cx - 20 - x0);
+            text(medium, U"vs", size * 0.85, Align::Center, Vec2{ cx, cy }, col::faint);
+            text(bold, widen(p.player[1]), size, Align::Left, Vec2{ cx + 20, cy }, col::text, x1 - cx - 20);
+        }
+    }
+
+    void draw_standings(const TournamentView& t, const RectF& r) {
         double x0 = r.x + 20, x1 = r.rightX() - 20;
         double y = r.y + 32;
         text(heavy, U"STANDINGS", 24, Align::Left, Vec2{ x0, y }, col::text);

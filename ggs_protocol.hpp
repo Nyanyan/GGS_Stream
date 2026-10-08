@@ -612,6 +612,48 @@ inline bool parse_rankings(const Message& msg, const std::string& tournament_id,
 }
 
 /*
+    @brief schedule of a round (t /td sr <id> <round>)
+        "/td: sr: schedule for round 4 in tournament 27:"
+        "|round   4:"
+        "|  4.1   Kalmia ymatioun    +0.0"
+        "|  4.3   Forest rests"
+*/
+struct Pairing {
+    std::string player[2]; // empty when the line has no pairing
+};
+
+inline bool parse_schedule_head(const std::string& head, const std::string& tournament_id, int& round) {
+    static const std::regex re(R"(^/td:\s+sr:\s+schedule for round (\d+) in tournament ([^\s:]+))");
+    std::smatch m;
+    if (!std::regex_search(head, m, re) || m[2].str() != tournament_id) return false;
+    return parse_int(m[1].str(), round);
+}
+
+// true if the line belongs to a schedule
+inline bool parse_schedule_row(const std::string& line, Pairing& out) {
+    static const std::regex re_id(R"(\d+\.\d+)");
+    std::vector<std::string> w = tokenize(line);
+    out = Pairing{};
+    if (!w.empty() && w[0] == "round") return true;
+    if (w.size() < 2 || !std::regex_match(w[0], re_id)) return false;
+    if (w.size() >= 3 && w[2] != "rests") {
+        out.player[0] = w[1];
+        out.player[1] = w[2];
+    }
+    return true;
+}
+
+inline bool parse_schedule(const Message& msg, const std::string& tournament_id, int& round, std::vector<Pairing>& pairings) {
+    if (!parse_schedule_head(msg.head, tournament_id, round)) return false;
+    pairings.clear();
+    for (const std::string& line : msg.body) {
+        Pairing p;
+        if (parse_schedule_row(line, p) && !p.player[0].empty()) pairings.push_back(p);
+    }
+    return true;
+}
+
+/*
     @brief finger: "/td: finger: " + "|id        : 6" "|rounds    : 2/5" ... "|round 3 is being played"
 */
 struct TournamentInfo {

@@ -78,6 +78,11 @@ static void test_parsers() {
 
     CHECK(ggs::parse_finger(frame_one("/td: finger: \n|id        : 6\n|breaks    :  1:00\n|round 4 begins in  0:42\n"), "6", info) && info.break_seconds == 60 && info.begins_in == 42 && info.in_break && info.current_round == 4);
 
+    int sr_round = 0;
+    std::vector<ggs::Pairing> pairings;
+    CHECK(ggs::parse_schedule(frame_one("/td: sr: schedule for round 4 in tournament 27:\n|round   4:\n|  4.1   Kalmia ymatioun    +0.0\n|  4.2    egrcd   Melody    +0.0\n|  4.3   Forest rests\n"), "27", sr_round, pairings)
+        && sr_round == 4 && pairings.size() == 2 && pairings[0].player[0] == "Kalmia" && pairings[1].player[1] == "Melody");
+
     // update message in the server format
     std::string update =
         "/os: update .4.1 s8r18 K?\n"
@@ -187,6 +192,7 @@ static void run_simulation(int n_players, uint64_t seed) {
     st.on_connected(now);
     size_t eval_points = 0, series_points = 0;
     int finished_rounds = 0;
+    uint64_t break_started = 0;
     auto collect = [&]() {
         for (const auto& m : st.t.matches) {
             CHECK(m.finished && m.joined());
@@ -212,7 +218,12 @@ static void run_simulation(int n_players, uint64_t seed) {
         now += 50;
         for (const auto& m : server.poll(now)) st.on_message(m, now);
         st.tick(now);
-        if (st.t.status == stream::RoundStatus::Break) CHECK(st.t.next_round_ms > now);
+        if (st.t.status == stream::RoundStatus::Break) {
+            CHECK(st.t.next_round_ms > now);
+            if (now > break_started + 3000) CHECK(st.t.next_round == st.t.round + 1 && (int)st.t.next_pairings.size() == n_players / 2);
+        } else {
+            break_started = now;
+        }
         if (st.t.status == stream::RoundStatus::Playing && st.t.round > 0) {
             matches_per_round[st.t.round] = std::max(matches_per_round[st.t.round], st.t.matches.size());
         }

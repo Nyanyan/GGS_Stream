@@ -206,6 +206,7 @@ public:
             if (words[3] != tid) return;
             if (words[2] == "r") emit_rankings();
             if (words[2] == "f") emit_finger();
+            if (words[2] == "sr" && words.size() >= 5) emit_schedule(std::atoi(words[4].c_str()));
         }
     }
 
@@ -549,6 +550,20 @@ private:
             body.push_back(format("%4.1f (%2d %2d %2d) { %6.2f } %8s [%.4f]", p.points, p.win, p.draw, p.loss, p.discs / played, p.name.c_str(), uniform(0.0, 1.0)));
         }
         emit(format("/td: rankings: tournament %s", tid.c_str()), body);
+    }
+
+    void emit_schedule(int r) {
+        if (r < 1 || r > (int)schedule.size()) {
+            emit(format("/td: ERR 12: sr: round %d is not scheduled", r), {});
+            return;
+        }
+        std::vector<std::string> body;
+        body.push_back(format("round %3d:", r));
+        int i = 0;
+        for (auto [a, b] : schedule[r - 1]) {
+            body.push_back(format("%5s  %8s %8s %7s", format("%d.%d", r, ++i).c_str(), players[a].name.c_str(), players[b].name.c_str(), "+0.0"));
+        }
+        emit(format("/td: sr: schedule for round %d in tournament %s:", r, tid.c_str()), body);
     }
 
     void emit_finger() {

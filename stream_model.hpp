@@ -298,6 +298,8 @@ struct TournamentView {
     uint64_t rankings_ms = 0;
     int break_seconds = 60;         // break between rounds (from the tournament info)
     uint64_t next_round_ms = 0;     // expected start of the next round during a break
+    int next_round = -1;            // round of next_pairings
+    std::vector<ggs::Pairing> next_pairings;
 
     MatchView* find_match(const std::string& match_id) {
         for (auto& m : matches) {
@@ -341,10 +343,12 @@ private:
     uint64_t rankings_due_ms = 0;  // 0: not scheduled
     uint64_t match_list_due_ms = 0;
     uint64_t finger_due_ms = 0;
+    uint64_t schedule_due_ms = 0;
+    int schedule_round = -1;
     bool connected = false;
     std::vector<ggs::RankRow> rank_rows;
     // rows of a TD table may arrive without the leading '|', i.e. as separate lines after the header
-    enum class TdTable { None, Rankings };
+    enum class TdTable { None, Rankings, Schedule };
     TdTable td_table = TdTable::None;
     uint64_t td_table_ms = 0;
 
@@ -373,6 +377,10 @@ public:
         if (rankings_due_ms && now >= rankings_due_ms) request_rankings(now);
         if (match_list_due_ms && now >= match_list_due_ms) request_match_list(now);
         if (finger_due_ms && now >= finger_due_ms) request_finger(now);
+        if (schedule_due_ms && now >= schedule_due_ms) {
+            emit("t /td sr " + t.id + " " + std::to_string(schedule_round));
+            schedule_due_ms = 0;
+        }
         if (now - last_rankings_ms >= RANKINGS_INTERVAL_MS) request_rankings(now);
         if (now - last_finger_ms >= FINGER_INTERVAL_MS) request_finger(now);
         if (need_match_list() && now - last_match_list_ms >= MATCH_LIST_INTERVAL_MS) request_match_list(now);
@@ -407,6 +415,11 @@ public:
         std::vector<ggs::RankRow> ranks;
         if (ggs::parse_rankings(msg, t.id, ranks)) {
             on_rankings(ranks, now);
+            return;
+        }
+        std::vector<ggs::Pairing> pairings;
+        if (ggs::parse_schedule(msg, t.id, round, pairings)) {
+            on_schedule(round, pairings, now);
             return;
         }
         ggs::TournamentInfo info;
@@ -493,6 +506,8 @@ private:
         t.round = round;
         t.status = RoundStatus::Playing;
         t.next_round_ms = 0;
+        t.next_round = -1;
+        t.next_pairings.clear();
         request_match_list(now);
         schedule_match_list(now, 3000);
         schedule_rankings(now, 200);
@@ -508,6 +523,7 @@ private:
         }
         schedule_rankings(now, 500);
         schedule_finger(now, 1000); // exact time to the next round
+        request_schedule(round + 1, now, 1500);
     }
 
     bool continue_td_table(const ggs::Message& msg, uint64_t now) {
@@ -520,7 +536,31 @@ private:
             td_table_ms = now;
             return true;
         }
+        if (td_table == TdTable::Schedule) {
+            ggs::Pairing p;
+            if (!ggs::parse_schedule_row(msg.head, p)) return false;
+            if (!p.player[0].empty()) t.next_pairings.push_back(p);
+            td_table_ms = now;
+            return true;
+        }
         return false;
+    }
+
+    void request_schedule(int round, uint64_t now, uint64_t delay) {
+        if (round < 1 || (t.rounds_total > 0 && round > t.rounds_total)) return;
+        if (t.next_round == round && !t.next_pairings.empty()) return;
+        schedule_round = round;
+        schedule_due_ms = now + delay;
+    }
+
+    void on_schedule(int round, const std::vector<ggs::Pairing>& pairings, uint64_t now) {
+        if (round != t.round + 1) return; // only the next round is shown
+        t.next_round = round;
+        t.next_pairings = pairings;
+        if (pairings.empty()) {
+            td_table = TdTable::Schedule;
+            td_table_ms = now;
+        }
     }
 
     void on_rankings(const std::vector<ggs::RankRow>& rows, uint64_t now) {
@@ -563,6 +603,7 @@ private:
             t.status = RoundStatus::Break;
             t.round = info.current_round - 1;
             if (info.begins_in >= 0) t.next_round_ms = now + (uint64_t)info.begins_in * 1000;
+            request_schedule(info.current_round, now, 0);
         }
     }
 
