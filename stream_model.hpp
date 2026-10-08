@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <set>
+#include <map>
 #include <functional>
 #include <algorithm>
 #include <cmath>
@@ -300,6 +301,13 @@ struct TournamentView {
     uint64_t next_round_ms = 0;     // expected start of the next round during a break
     int next_round = -1;            // round of next_pairings
     std::vector<ggs::Pairing> next_pairings;
+    std::map<std::string, int> rank_at_round_start;
+
+    // > 0: moved up since the round started, < 0: moved down
+    int rank_change(const std::string& name, int rank) const {
+        auto it = rank_at_round_start.find(name);
+        return it == rank_at_round_start.end() ? 0 : it->second - rank;
+    }
 
     MatchView* find_match(const std::string& match_id) {
         for (auto& m : matches) {
@@ -508,6 +516,10 @@ private:
         t.next_round_ms = 0;
         t.next_round = -1;
         t.next_pairings.clear();
+        if (!t.rankings.empty()) {
+            t.rank_at_round_start.clear();
+            for (const auto& e : t.rankings) t.rank_at_round_start[e.row.name] = e.rank;
+        }
         request_match_list(now);
         schedule_match_list(now, 3000);
         schedule_rankings(now, 200);

@@ -224,6 +224,7 @@ static void run_simulation(int n_players, uint64_t seed) {
         } else {
             break_started = now;
         }
+        if (st.t.status == stream::RoundStatus::Playing && st.t.round > 1) CHECK(!st.t.rank_at_round_start.empty());
         if (st.t.status == stream::RoundStatus::Playing && st.t.round > 0) {
             matches_per_round[st.t.round] = std::max(matches_per_round[st.t.round], st.t.matches.size());
         }

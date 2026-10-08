@@ -349,7 +349,7 @@ private:
             if (done > 0) text(bold, U"AFTER ROUND {}"_fmt(done), 16, Align::Right, Vec2{ x1, y }, col::sub);
         }
         y += 38;
-        double c_rank = x0 + 12, c_name = x0 + 38, c_pts = x0 + 168, c_wdl = x0 + 236, c_disc = x1;
+        double c_rank = x0 + 12, c_move = x0 + 33, c_name = x0 + 46, c_pts = x0 + 180, c_wdl = x0 + 248, c_disc = x1;
         text(bold, U"PTS", 15, Align::Center, Vec2{ c_pts, y }, col::faint);
         text(bold, U"W-D-L", 15, Align::Center, Vec2{ c_wdl, y }, col::faint);
         text(bold, U"DISC", 15, Align::Right, Vec2{ c_disc, y }, col::faint);
@@ -371,10 +371,16 @@ private:
             if (i % 2 == 1) RectF{ r.x + 1, cy - rh / 2, r.w - 2, rh }.draw(ColorF{ 1, 1, 1, 0.025 });
             ColorF rank_color = e.rank == 1 ? col::gold : e.rank == 2 ? col::silver : e.rank == 3 ? col::bronze : col::sub;
             text(heavy, U"{}"_fmt(e.rank), size, Align::Center, Vec2{ c_rank, cy }, rank_color);
+            int move = t.rank_change(e.row.name, e.rank);
+            if (move != 0) {
+                double a = Clamp(size * 0.28, 4.0, 6.0);
+                if (move > 0) Triangle{ Vec2{ c_move, cy - a }, Vec2{ c_move + a, cy + a * 0.8 }, Vec2{ c_move - a, cy + a * 0.8 } }.draw(col::win);
+                else Triangle{ Vec2{ c_move, cy + a }, Vec2{ c_move - a, cy - a * 0.8 }, Vec2{ c_move + a, cy - a * 0.8 } }.draw(col::loss);
+            }
             text(bold, widen(e.row.name), size, Align::Left, Vec2{ c_name, cy }, col::text, c_pts - 24 - c_name);
             text(heavy, format_points(e.row.points), size, Align::Center, Vec2{ c_pts, cy }, col::text);
             if (e.row.has_record) {
-                text(medium, U"{}-{}-{}"_fmt(e.row.win, e.row.draw, e.row.loss), size * 0.92, Align::Center, Vec2{ c_wdl, cy }, col::sub, 76);
+                text(medium, U"{}-{}-{}"_fmt(e.row.win, e.row.draw, e.row.loss), size * 0.92, Align::Center, Vec2{ c_wdl, cy }, col::sub, 82);
             }
             if (e.row.has_discs) {
                 ColorF dc = e.row.discs > 0.05 ? col::win : e.row.discs < -0.05 ? col::loss : col::sub;
