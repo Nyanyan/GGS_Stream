@@ -574,23 +574,31 @@ struct RankRow {
     bool has_discs = false;
 };
 
+// "79.0 (62 34  4) {   1.48 } ymatioun [0.4768]"
+inline bool parse_rank_row(const std::string& line, RankRow& out) {
+    static const std::regex re_row(R"(^\s*(-?[0-9.]+)\s*\(\s*(\d+)\s+(\d+)\s+(\d+)\s*\)\s*(?:\{\s*([-+0-9.]+)\s*\}\s*)?(\S+))");
+    std::smatch r;
+    if (!std::regex_search(line, r, re_row)) return false;
+    RankRow row;
+    parse_double(r[1].str(), row.points);
+    parse_int(r[2].str(), row.win);
+    parse_int(r[3].str(), row.draw);
+    parse_int(r[4].str(), row.loss);
+    row.has_record = true;
+    if (r[5].matched) row.has_discs = parse_double(r[5].str(), row.discs);
+    row.name = r[6].str();
+    out = row;
+    return true;
+}
+
 inline bool parse_rankings(const Message& msg, const std::string& tournament_id, std::vector<RankRow>& rows) {
     static const std::regex re_head(R"(^/td:\s+rankings:\s+tournament\s+(\S+))");
-    static const std::regex re_row(R"(^\s*(-?[0-9.]+)\s*\(\s*(\d+)\s+(\d+)\s+(\d+)\s*\)\s*(?:\{\s*([-+0-9.]+)\s*\}\s*)?(\S+))");
     std::smatch m;
     if (!std::regex_search(msg.head, m, re_head) || m[1].str() != tournament_id) return false;
     rows.clear();
     for (const std::string& line : msg.body) {
-        std::smatch r;
         RankRow row;
-        if (std::regex_search(line, r, re_row)) {
-            parse_double(r[1].str(), row.points);
-            parse_int(r[2].str(), row.win);
-            parse_int(r[3].str(), row.draw);
-            parse_int(r[4].str(), row.loss);
-            row.has_record = true;
-            if (r[5].matched) row.has_discs = parse_double(r[5].str(), row.discs);
-            row.name = r[6].str();
+        if (parse_rank_row(line, row)) {
             rows.push_back(row);
         } else {
             std::vector<std::string> words = tokenize(line);

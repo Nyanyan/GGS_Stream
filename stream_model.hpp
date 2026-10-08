@@ -342,6 +342,11 @@ private:
     uint64_t match_list_due_ms = 0;
     uint64_t finger_due_ms = 0;
     bool connected = false;
+    std::vector<ggs::RankRow> rank_rows;
+    // rows of a TD table may arrive without the leading '|', i.e. as separate lines after the header
+    enum class TdTable { None, Rankings };
+    TdTable td_table = TdTable::None;
+    uint64_t td_table_ms = 0;
 
 public:
     explicit StreamState(const std::string& tournament_id) {
@@ -382,6 +387,8 @@ public:
     }
 
     void on_message(const ggs::Message& msg, uint64_t now) {
+        if (continue_td_table(msg, now)) return;
+        td_table = TdTable::None;
         int round = ggs::parse_round_event(msg, t.id, true);
         if (round >= 0) {
             on_round_start(round, now);
@@ -503,7 +510,30 @@ private:
         schedule_finger(now, 1000); // exact time to the next round
     }
 
+    bool continue_td_table(const ggs::Message& msg, uint64_t now) {
+        if (td_table == TdTable::None || !msg.body.empty() || now - td_table_ms > 3000) return false;
+        if (td_table == TdTable::Rankings) {
+            ggs::RankRow row;
+            if (!ggs::parse_rank_row(msg.head, row)) return false;
+            rank_rows.push_back(row);
+            set_rankings(now);
+            td_table_ms = now;
+            return true;
+        }
+        return false;
+    }
+
     void on_rankings(const std::vector<ggs::RankRow>& rows, uint64_t now) {
+        rank_rows = rows;
+        set_rankings(now);
+        if (rows.empty()) {
+            td_table = TdTable::Rankings;
+            td_table_ms = now;
+        }
+    }
+
+    void set_rankings(uint64_t now) {
+        const auto& rows = rank_rows;
         t.rankings.clear();
         int rank = 0;
         for (size_t i = 0; i < rows.size(); ++i) {

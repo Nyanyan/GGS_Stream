@@ -146,6 +146,33 @@ static void test_forced_eval() {
     CHECK(st.t.matches[0].game[0].has_prev);
 }
 
+static void test_real_rankings() {
+    // response seen on the real server; rows with and without the leading '|'
+    const char* rows[] = {
+        "79.0 (62 34  4) {   1.48 } ymatioun [0.4768]",
+        "65.5 (45 41 14) {   0.77 }   Kalmia [0.4875]",
+        "64.5 (48 33 19) {   0.81 }   Melody [0.4887]",
+        "59.0 (38 42 20) {   0.45 }    egrcd [0.4928]",
+        "19.0 (12 14 74) {  -1.28 }   Forest [0.5260]",
+        "13.0 ( 7 12 81) {  -2.23 }   piglet [0.5283]",
+    };
+    for (int with_bar = 0; with_bar < 2; ++with_bar) {
+        stream::StreamState st("27");
+        std::string raw = "/td: rankings: tournament 27\n";
+        for (const char* r : rows) raw += std::string(with_bar ? "|" : "") + r + "\n";
+        ggs::MessageFramer f;
+        f.feed(raw, 0);
+        f.tick(1000);
+        for (const auto& m : f.take()) st.on_message(m, 1000);
+        const auto& rk = st.t.rankings;
+        CHECK(rk.size() == 6);
+        if (rk.size() != 6) continue;
+        CHECK(rk[0].rank == 1 && rk[0].row.name == "ymatioun" && rk[0].row.points == 79.0 && rk[0].row.win == 62 && rk[0].row.draw == 34 && rk[0].row.loss == 4 && rk[0].row.discs == 1.48);
+        CHECK(rk[5].rank == 6 && rk[5].row.name == "piglet" && rk[5].row.discs == -2.23);
+        CHECK(st.t.is_player("egrcd"));
+    }
+}
+
 static void run_simulation(int n_players, uint64_t seed) {
     demo::DemoServer server(n_players, 40.0, "9", seed);
     stream::StreamState st("9");
@@ -212,6 +239,7 @@ int main() {
     flip_init();
     test_parsers();
     test_forced_eval();
+    test_real_rankings();
     run_simulation(6, 1);
     run_simulation(4, 2);
     run_simulation(8, 3);
