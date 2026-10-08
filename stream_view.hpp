@@ -201,7 +201,11 @@ public:
         RectF sidebar{ SCENE_W - MARGIN - SIDEBAR_W, HEADER_H + 20, SIDEBAR_W, SCENE_H - HEADER_H - 20 - MARGIN };
         draw_sidebar(t, sidebar);
         RectF main{ MARGIN, HEADER_H + 20, sidebar.x - MARGIN - 20, SCENE_H - HEADER_H - 20 - MARGIN };
-        draw_matches(t, main, now);
+        if (t.status == RoundStatus::Over && !t.rankings.empty()) {
+            draw_podium(t, main);
+        } else {
+            draw_matches(t, main, now);
+        }
         if (info.debug) draw_debug(t, info);
     }
 
@@ -386,6 +390,37 @@ private:
                 ColorF dc = e.row.discs > 0.05 ? col::win : e.row.discs < -0.05 ? col::loss : col::sub;
                 text(medium, format_signed(e.row.discs), size * 0.92, Align::Right, Vec2{ c_disc, cy }, dc, 58);
             }
+        }
+    }
+
+    /*
+        final standings: top three on a podium
+    */
+    void draw_podium(const TournamentView& t, const RectF& area) {
+        text(heavy, U"FINAL STANDINGS", 44, Align::Center, Vec2{ area.centerX(), area.y + 70 }, col::text);
+        int n = (int)Min<size_t>(3, t.rankings.size());
+        const int order[3] = { 1, 0, 2 }; // 2nd, 1st, 3rd from the left
+        const double heights[3] = { 380, 290, 230 };
+        const ColorF colors[3] = { col::gold, col::silver, col::bronze };
+        double cw = 340, gap = 40;
+        double total = 3 * cw + 2 * gap;
+        double x0 = area.centerX() - total / 2;
+        double base = area.bottomY() - 40;
+        for (int slot = 0; slot < 3; ++slot) {
+            int i = order[slot];
+            if (i >= n) continue;
+            const auto& e = t.rankings[i];
+            double x = x0 + slot * (cw + gap);
+            RectF block{ x, base - heights[i], cw, heights[i] };
+            block.draw(colors[i]);
+            text(heavy, U"{}"_fmt(e.rank), 110, Align::Center, Vec2{ block.centerX(), block.y + 80 }, col::bg);
+            double y = block.y - 150;
+            text(heavy, widen(e.row.name), 48, Align::Center, Vec2{ block.centerX(), y }, col::text, cw);
+            text(heavy, format_points(e.row.points) + U" pts", 30, Align::Center, Vec2{ block.centerX(), y + 56 }, colors[i]);
+            String detail;
+            if (e.row.has_record) detail += U"{}-{}-{}"_fmt(e.row.win, e.row.draw, e.row.loss);
+            if (e.row.has_discs) detail += String{ detail.isEmpty() ? U"" : U"   " } + U"disc " + format_signed(e.row.discs);
+            text(medium, detail, 22, Align::Center, Vec2{ block.centerX(), y + 98 }, col::sub, cw);
         }
     }
 
