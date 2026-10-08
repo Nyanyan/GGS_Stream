@@ -21,6 +21,7 @@
         --seed N            demo random seed
         --title TEXT        title shown on the stream
         --fullscreen        start in fullscreen
+        --focus N           start with match N shown alone (keys 1-9 / 0 while running)
         --capture PREFIX    save screenshots as PREFIX_<sec>.png ...
         --capture-at A,B,C  ... at these times in seconds
         --quit-after SEC    exit automatically
@@ -35,6 +36,7 @@ struct Config {
     double demo_speed = 3.0;
     uint64_t demo_seed = 0;
     bool fullscreen = false;
+    int focus = -1;
     std::string capture_prefix;
     std::vector<double> capture_at;
     double quit_after = -1.0;
@@ -54,6 +56,7 @@ static Config load_config() {
         else if (a == U"--seed") cfg.demo_seed = ParseOr<uint64>(Unicode::FromUTF8(next()), 0);
         else if (a == U"--title") cfg.title = next();
         else if (a == U"--fullscreen") cfg.fullscreen = true;
+        else if (a == U"--focus") cfg.focus = ParseOr<int32>(Unicode::FromUTF8(next()), 0) - 1;
         else if (a == U"--capture") cfg.capture_prefix = next();
         else if (a == U"--capture-at") {
             for (const auto& t : Unicode::FromUTF8(next()).split(U',')) cfg.capture_at.push_back(ParseOr<double>(t, 0.0));
@@ -119,6 +122,7 @@ void Main()
     view::AppInfo info;
     info.title = Unicode::FromUTF8(cfg.title);
     info.demo = cfg.demo;
+    info.focus = cfg.focus;
 
     if (!cfg.error.empty()) {
         app_log().write("ERROR", cfg.error);
@@ -144,6 +148,7 @@ void Main()
     state.log = [](const std::string& s) { app_log().write("STATE", s); };
 
     int seen_epoch = 0;
+    int focus_round = -1;
     bool was_online = false;
     size_t next_capture = 0;
     String capture_path;
@@ -163,6 +168,16 @@ void Main()
         state.tick(now);
 
         if (KeyF1.down()) info.debug = !info.debug;
+        // 1-9: show one match large, 0: all matches (podium after the tournament)
+        const Input digit_keys[10] = { Key0, Key1, Key2, Key3, Key4, Key5, Key6, Key7, Key8, Key9 };
+        const Input numpad_keys[10] = { KeyNum0, KeyNum1, KeyNum2, KeyNum3, KeyNum4, KeyNum5, KeyNum6, KeyNum7, KeyNum8, KeyNum9 };
+        for (int d = 0; d < 10; ++d) {
+            if (digit_keys[d].down() || numpad_keys[d].down()) info.focus = d - 1;
+        }
+        if (state.t.round != focus_round) {
+            if (focus_round != -1) info.focus = -1; // a new round starts with all matches
+            focus_round = state.t.round;
+        }
         if (KeyF11.down()) Window::SetFullscreen(!Window::GetState().fullscreen);
 
         info.online = online;

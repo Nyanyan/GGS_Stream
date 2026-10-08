@@ -176,6 +176,7 @@ struct AppInfo {
     bool online = false;
     String connection;
     bool debug = false;
+    int focus = -1; // index of the match shown alone, -1: all matches
 };
 
 class StreamView {
@@ -201,10 +202,11 @@ public:
         RectF sidebar{ SCENE_W - MARGIN - SIDEBAR_W, HEADER_H + 20, SIDEBAR_W, SCENE_H - HEADER_H - 20 - MARGIN };
         draw_sidebar(t, sidebar);
         RectF main{ MARGIN, HEADER_H + 20, sidebar.x - MARGIN - 20, SCENE_H - HEADER_H - 20 - MARGIN };
-        if (t.status == RoundStatus::Over && !t.rankings.empty()) {
+        bool focused = 0 <= info.focus && info.focus < (int)t.matches.size();
+        if (t.status == RoundStatus::Over && !t.rankings.empty() && !focused) {
             draw_podium(t, main);
         } else {
-            draw_matches(t, main, now);
+            draw_matches(t, main, now, focused ? info.focus : -1);
         }
         if (info.debug) draw_debug(t, info);
     }
@@ -427,7 +429,7 @@ private:
     /*
         match cards
     */
-    void draw_matches(const TournamentView& t, const RectF& area, uint64_t now) {
+    void draw_matches(const TournamentView& t, const RectF& area, uint64_t now, int focus) {
         if (t.matches.empty()) {
             String msg = t.status == RoundStatus::Over ? U"Tournament finished"
                        : t.status == RoundStatus::Break ? U"Next round will start soon"
@@ -436,7 +438,8 @@ private:
             text(heavy, msg, 36, Align::Center, area.center(), col::sub);
             return;
         }
-        int n = (int)t.matches.size();
+        // a focused match is drawn alone, as large as possible
+        int n = focus >= 0 ? 1 : (int)t.matches.size();
         GridLayout g = solve_layout(n, area.w, area.h);
         const CardMetrics& c = g.card;
         double grid_h = g.rows * c.height + (g.rows - 1) * g.gap;
@@ -446,7 +449,7 @@ private:
             double row_w = in_row * c.width + (in_row - 1) * g.gap;
             double x0 = area.x + (area.w - row_w) / 2;
             for (int i = 0; i < in_row; ++i) {
-                const MatchView& m = t.matches[row * g.cols + i];
+                const MatchView& m = t.matches[focus >= 0 ? focus : row * g.cols + i];
                 RectF card{ x0 + i * (c.width + g.gap), y0 + row * (c.height + g.gap), c.width, c.height };
                 draw_card(m, card, c, now);
             }
