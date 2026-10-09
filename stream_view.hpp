@@ -616,7 +616,7 @@ private:
         double half_score = Max(sa.size(), sb.size()) * digit_ratio_heavy * score_size + 14 * s;
         double result = 0;
         bool has_result = m.result_sum(result);
-        double name_w = has_result ? r.w / 2 - half_score - Max(10.0, 10 * s) : (r.w - Max(10.0, 10 * s)) / 2;
+        double name_w = r.w / 2 - half_score - Max(10.0, 10 * s);
         for (int i = 0; i < 2; ++i) {
             bool left = i == 0;
             double edge = left ? r.x : r.rightX();
@@ -634,10 +634,10 @@ private:
             }
         }
         double cx = r.centerX();
+        mono(heavy, digit_ratio_heavy, sa, score_size, Align::Right, Vec2{ cx - 12 * s, y1 }, col::text);
+        RectF{ cx - 5 * s, y1 - 1.5 * s, 10 * s, 3 * s }.draw(col::faint);
+        mono(heavy, digit_ratio_heavy, sb, score_size, Align::Left, Vec2{ cx + 12 * s, y1 }, col::text);
         if (has_result) {
-            mono(heavy, digit_ratio_heavy, sa, score_size, Align::Right, Vec2{ cx - 12 * s, y1 }, col::text);
-            RectF{ cx - 5 * s, y1 - 1.5 * s, 10 * s, 3 * s }.draw(col::faint);
-            mono(heavy, digit_ratio_heavy, sb, score_size, Align::Left, Vec2{ cx + 12 * s, y1 }, col::text);
             text(medium, U"final " + format_signed(result), fs(16 * s), Align::Center, Vec2{ cx, y2 }, col::sub);
         } else if (!m.joined()) {
             text(bold, U"connecting", fs(16 * s), Align::Center, Vec2{ cx, y2 }, col::faint);
