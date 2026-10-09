@@ -342,6 +342,21 @@ static void test_synchro_divergence() {
     CHECK(match.first_divergent_ply() == 0);
 }
 
+static void test_engine_evaluation() {
+    stream::GameView game;
+    game.evals[BLACK] = { { 1, 3.54, false }, { 3, -2.06, false }, { 5, 0.0, false }, { 6, 20.0, true } };
+    game.evals[WHITE] = { { 2, -1.27, false }, { 6, -20.0, true } };
+    double value = 0;
+    CHECK(!game.engine_eval_at(BLACK, 0, value)); // no future estimate at the initial replay position
+    CHECK(game.engine_eval_at(BLACK, 2, value) && value == 3.54);
+    CHECK(game.engine_eval_at(BLACK, 4, value) && value == -2.06); // retain the last report until another arrives
+    CHECK(!game.engine_eval_at(WHITE, 1, value));
+    CHECK(game.engine_eval_at(WHITE, 6, value) && value == -1.27); // own perspective, not sign-inverted
+    CHECK(game.engine_eval_at(BLACK, 6, value) && value == 0.0); // zero is an estimate, not missing data
+    game.evals[WHITE] = { { 6, -20.0, true } };
+    CHECK(!game.engine_eval_at(WHITE, 6, value)); // a final result is not an engine report
+}
+
 static void test_replay_seek() {
     stream::MatchView match;
     ggs::Position start;
@@ -396,6 +411,7 @@ int main() {
     test_real_rankings();
     test_log_replay();
     test_synchro_divergence();
+    test_engine_evaluation();
     test_replay_seek();
     run_simulation(6, 1);
     run_simulation(4, 2);

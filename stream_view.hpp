@@ -284,15 +284,19 @@ private:
     }
 
     // fixed advance for digits so that numbers do not jitter
-    static RectF mono(const Font& font, double ratio, const String& s, double size, Align align, const Vec2& p, const ColorF& color) {
+    static RectF mono(const Font& font, double ratio, const String& s, double size, Align align, const Vec2& p, const ColorF& color, double max_w = 0) {
+        double advance = 0;
+        auto wide = [](char32 c) { return IsDigit(c) || c == U'+' || c == U'-'; };
+        for (char32 c : s) advance += wide(c) ? 1.0 : 0.55;
+        if (max_w > 0 && advance > 0) size = Min(size, max_w / (ratio * advance));
         double dw = ratio * size;
         double nw = dw * 0.55;
         double total = 0;
-        for (char32 c : s) total += IsDigit(c) ? dw : nw;
+        for (char32 c : s) total += wide(c) ? dw : nw;
         double x = align == Align::Left ? p.x : align == Align::Center ? p.x - total / 2 : p.x - total;
         RectF region{ x, p.y - size * 0.6, total, size * 1.2 };
         for (char32 c : s) {
-            double w = IsDigit(c) ? dw : nw;
+            double w = wide(c) ? dw : nw;
             font(String(1, c)).draw(size, Arg::center = Vec2{ x + w / 2, p.y }, color);
             x += w;
         }
@@ -612,7 +616,7 @@ private:
         double half_score = Max(sa.size(), sb.size()) * digit_ratio_heavy * score_size + 14 * s;
         double result = 0;
         bool has_result = m.result_sum(result);
-        double name_w = r.w / 2 - half_score - Max(10.0, 10 * s);
+        double name_w = has_result ? r.w / 2 - half_score - Max(10.0, 10 * s) : (r.w - Max(10.0, 10 * s)) / 2;
         for (int i = 0; i < 2; ++i) {
             bool left = i == 0;
             double edge = left ? r.x : r.rightX();
@@ -630,10 +634,10 @@ private:
             }
         }
         double cx = r.centerX();
-        mono(heavy, digit_ratio_heavy, sa, score_size, Align::Right, Vec2{ cx - 12 * s, y1 }, col::text);
-        RectF{ cx - 5 * s, y1 - 1.5 * s, 10 * s, 3 * s }.draw(col::faint);
-        mono(heavy, digit_ratio_heavy, sb, score_size, Align::Left, Vec2{ cx + 12 * s, y1 }, col::text);
         if (has_result) {
+            mono(heavy, digit_ratio_heavy, sa, score_size, Align::Right, Vec2{ cx - 12 * s, y1 }, col::text);
+            RectF{ cx - 5 * s, y1 - 1.5 * s, 10 * s, 3 * s }.draw(col::faint);
+            mono(heavy, digit_ratio_heavy, sb, score_size, Align::Left, Vec2{ cx + 12 * s, y1 }, col::text);
             text(medium, U"final " + format_signed(result), fs(16 * s), Align::Center, Vec2{ cx, y2 }, col::sub);
         } else if (!m.joined()) {
             text(bold, U"connecting", fs(16 * s), Align::Center, Vec2{ cx, y2 }, col::faint);
@@ -657,6 +661,20 @@ private:
         double r_black = g.final_result_black();
         double mine = color == BLACK ? r_black : -r_black;
         text(heavy, format_signed(mine), size, a, p, col::text);
+    }
+
+    static String engine_evaluation(const GameView& g, const stream::ReplayFrame& f, int color) {
+        double value = 0;
+        if (!g.engine_eval_at(color, f.active ? f.ply : g.ply, value)) return U"\u2014";
+        if (std::abs(value) < 0.05) value = 0; // avoid displaying a rounded negative zero
+        return U"{:+.1f}"_fmt(value);
+    }
+
+    void draw_engine_evaluation(const GameView& g, const stream::ReplayFrame& f, int color,
+        double size, Align a, const Vec2& p, double max_w) {
+        String value = engine_evaluation(g, f, color);
+        if (value == U"\u2014") text(heavy, value, size, a, p, col::faint, max_w);
+        else mono(heavy, digit_ratio_heavy, value, size, a, p, col::text, max_w);
     }
 
     /*
@@ -691,12 +709,11 @@ private:
             text(bold, player_name(g.name[color]), fs(19 * s), Align::Left, Vec2{ name_x, y_name }, col::on_accent, h.rightX() - 10 * s - name_x);
             double y_clock = h.y + h.h * 0.81;
             double clock_h = bold(U"00:00").region(fs(23 * s)).h;
-            double count_top = y_name + band_h / 2 + 6;
-            double count_bottom = y_clock - clock_h / 2 - 6;
-            double count_size = Min(48 * s, Max(15.0, (count_bottom - count_top) * 48 / heavy(U"64").region(48).h));
-            int count = f.active ? stream::disc_count(g.history[f.ply], color) : g.discs(color);
-            mono(heavy, digit_ratio_heavy, U"{}"_fmt(count), count_size, Align::Left,
-                Vec2{ x - 2 * s, (count_top + count_bottom) / 2 }, col::text);
+            double value_top = y_name + band_h / 2 + 6;
+            double value_bottom = y_clock - clock_h / 2 - 6;
+            double value_size = Min(48 * s, Max(15.0, (value_bottom - value_top) * 48 / heavy(U"64").region(48).h));
+            draw_engine_evaluation(g, f, color, value_size, Align::Left,
+                Vec2{ x, (value_top + value_bottom) / 2 }, h.w - 24 * s);
             if (g.finished) {
                 draw_game_score(g, color, fs(23 * s), Align::Left, Vec2{ x, y_clock });
             } else if (g.has_clock) {
@@ -739,19 +756,28 @@ private:
             if (!g.active) continue;
             double name_x = edge + dir * (dr * 2 + 6 * s);
             text(bold, player_name(g.name[color]), fs(18 * s), a, Vec2{ name_x, y1 }, col::on_accent, std::abs(inner - name_x));
-            if (!f.active) {
-                mono(heavy, digit_ratio_heavy, U"{}"_fmt(g.discs(color)), fs(26 * s), b, Vec2{ inner, y2 }, col::text);
+            double value_w = half - 16 * s;
+            if (f.active) {
+                double tag_w = heavy(U"REPLAY").region(fs(14 * s)).w + fs(14 * s);
+                value_w -= tag_w / 2 + 6;
+            } else {
+                String secondary = g.finished ? format_signed(color == BLACK ? g.final_result_black() : -g.final_result_black())
+                    : g.has_clock ? format_clock(g.remaining_seconds(color, now)) : U"";
+                double secondary_w = bold(secondary).region(fs(19 * s)).w;
+                value_w -= secondary_w + 8 * s;
             }
-            if (g.finished) {
+            draw_engine_evaluation(g, f, color, fs(26 * s), f.active ? a : b,
+                Vec2{ f.active ? edge : inner, y2 }, Max(1.0, value_w));
+            if (g.finished && !f.active) {
                 draw_game_score(g, color, fs(19 * s), a, Vec2{ edge, y2 });
-            } else if (g.has_clock) {
+            } else if (!g.finished && g.has_clock) {
                 int sec = g.remaining_seconds(color, now);
                 ColorF cc = sec <= 60 ? col::loss : sec <= 180 ? col::warn : st.to_move ? col::text : col::sub;
                 mono(bold, digit_ratio_bold, format_clock(sec), fs(19 * s), a, Vec2{ edge, y2 }, cc);
             }
         }
         if (f.active) {
-            // the discs are replaced by the replay tag in the middle of the second row
+            // Keep the replay tag between the two engines' estimates.
             double size = fs(14 * s);
             double w = heavy(U"REPLAY").region(size).w + size;
             RectF tag{ area.centerX() - w / 2, y2 - size * 0.75, w, size * 1.5 };

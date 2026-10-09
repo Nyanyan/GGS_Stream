@@ -145,11 +145,15 @@ struct GameView {
         return has_official_result ? result_black : (double)score_black(pos);
     }
 
-    // last evaluation of the player with this color (own perspective)
-    bool last_eval(int color, double& value) const {
-        if (evals[color].empty()) return false;
-        value = evals[color].back().value;
-        return true;
+    // Latest engine estimate at this position; synthetic final results are graph data only.
+    bool engine_eval_at(int color, int at_ply, double& value) const {
+        for (auto it = evals[color].rbegin(); it != evals[color].rend(); ++it) {
+            if (it->ply <= at_ply && !it->exact) {
+                value = it->value;
+                return true;
+            }
+        }
+        return false;
     }
 
     int x_max() const {
