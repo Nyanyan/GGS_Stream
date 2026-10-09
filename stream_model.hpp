@@ -291,6 +291,64 @@ inline ReplayFrame replay_frame(const MatchView& m, int i, uint64_t now) {
     return f;
 }
 
+// Operator-selected positions stay still until playback is explicitly resumed.
+struct ReplayControl {
+    int selected_ply = -1;
+    bool has_resume_anchor = false;
+    uint64_t resumed_ms = 0;
+    uint64_t resumed_phase_ms = 0;
+
+    static int length(const MatchView& m) {
+        if (!m.both_games_finished()) return 0;
+        int n = 0;
+        for (const auto& g : m.game) if (g.can_replay()) n = std::max(n, (int)g.history.size() - 1);
+        return n;
+    }
+
+    bool paused() const { return selected_ply >= 0; }
+
+    bool seek(const MatchView& m, int ply) {
+        int n = length(m);
+        if (n == 0) return false;
+        selected_ply = std::clamp(ply, 0, n);
+        has_resume_anchor = false;
+        return true;
+    }
+
+    bool seek_fraction(const MatchView& m, double fraction) {
+        return seek(m, (int)std::lround(std::clamp(fraction, 0.0, 1.0) * m.x_max()));
+    }
+
+    void resume(const MatchView& m, uint64_t now) {
+        if (!paused()) return;
+        int n = length(m);
+        resumed_phase_ms = selected_ply == 0 ? 0
+            : selected_ply >= n ? REPLAY_START_HOLD_MS + (uint64_t)n * REPLAY_STEP_MS
+            : REPLAY_START_HOLD_MS + (uint64_t)(selected_ply - 1) * REPLAY_STEP_MS + FLIP_ANIMATION_MS;
+        resumed_ms = now;
+        selected_ply = -1;
+        has_resume_anchor = true;
+    }
+
+    ReplayFrame frame(const MatchView& m, int i, uint64_t now) const {
+        const auto& g = m.game[i];
+        if (paused()) {
+            ReplayFrame f;
+            if (!m.both_games_finished() || !g.can_replay()) return f;
+            f.active = true;
+            f.n = (int)g.history.size() - 1;
+            f.ply = std::min(selected_ply, f.n);
+            return f; // t == 1: scrubbing always shows a complete position
+        }
+        if (has_resume_anchor) {
+            uint64_t base = std::max(m.game[0].finished_ms, m.game[1].finished_ms);
+            uint64_t elapsed = now >= resumed_ms ? now - resumed_ms : 0;
+            return replay_frame(m, i, base + REPLAY_FIRST_HOLD_MS + resumed_phase_ms + elapsed);
+        }
+        return replay_frame(m, i, now);
+    }
+};
+
 struct RankEntry {
     int rank = 0;
     ggs::RankRow row;

@@ -193,6 +193,11 @@ class StreamView {
     double digit_ratio_heavy = 0.6;
     double digit_ratio_bold = 0.6;
     std::map<std::string, String> display_names; // GGS login -> name shown on the stream
+    std::map<std::string, stream::ReplayControl> replay_controls;
+    std::string dragging_match;
+    std::string selected_match;
+    int replay_round = -1;
+    bool dragging_visible = false;
 
 public:
     void set_display_names(std::map<std::string, String> names) {
@@ -207,6 +212,23 @@ public:
     }
 
     void draw(const TournamentView& t, const AppInfo& info, uint64_t now) {
+        if (replay_round != t.round) {
+            if (!dragging_match.empty()) Cursor::SetCapture(false);
+            replay_controls.clear();
+            dragging_match.clear();
+            selected_match.clear();
+            replay_round = t.round;
+        }
+        if (!MouseL.pressed()) {
+            if (!dragging_match.empty()) Cursor::SetCapture(false);
+            dragging_match.clear();
+        }
+        dragging_visible = false;
+        for (auto it = replay_controls.begin(); it != replay_controls.end();) {
+            bool present = std::any_of(t.matches.begin(), t.matches.end(), [&](const auto& m) { return m.id == it->first; });
+            if (present) ++it;
+            else it = replay_controls.erase(it);
+        }
         RectF{ 0, 0, SCENE_W, SCENE_H }.draw(col::bg);
         draw_header(t, info, now);
         RectF sidebar{ SCENE_W - MARGIN - SIDEBAR_W, HEADER_H + 28, SIDEBAR_W, SCENE_H - HEADER_H - 28 - MARGIN };
@@ -218,6 +240,10 @@ public:
         } else {
             draw_sidebar(t, sidebar);
             draw_matches(t, main, now, focused ? info.focus : -1);
+        }
+        if (!dragging_visible && !dragging_match.empty()) {
+            Cursor::SetCapture(false);
+            dragging_match.clear();
         }
         if (info.debug) draw_debug(t, info);
     }
@@ -544,7 +570,9 @@ private:
         draw_card_header(m, RectF{ inner.x, inner.y, inner.w, c.header }, s);
         double y = inner.y + c.header + c.gap;
         RectF graph{ inner.x, y + (c.horizontal ? 1 : 2) * (c.strip + c.board + c.gap), inner.w, c.graph };
-        stream::ReplayFrame frames[2] = { stream::replay_frame(m, 0, now), stream::replay_frame(m, 1, now) };
+        auto& playback = replay_controls[m.id];
+        handle_replay_input(m, graph, s, now, playback);
+        stream::ReplayFrame frames[2] = { playback.frame(m, 0, now), playback.frame(m, 1, now) };
         auto draw_unit = [&](int i, double x, double uy, bool panel_left) {
             const GameView& g = m.game[i];
             if (c.side) {
@@ -571,7 +599,7 @@ private:
         // The longer game's cursor keeps advancing if the shorter game has ended.
         int cursor = -1;
         for (const auto& f : frames) if (f.active) cursor = Max(cursor, f.ply);
-        draw_graph(m, graph, s, cursor);
+        draw_graph(m, graph, s, cursor, playback.paused());
     }
 
     void draw_card_header(const MatchView& m, const RectF& r, double s) {
@@ -803,7 +831,7 @@ private:
 
     struct GraphMetrics {
         double size, label_h, heading_y, legend_y;
-        RectF plot;
+        RectF plot, play;
     };
 
     GraphMetrics graph_metrics(const RectF& r, double s, bool has_divergence) const {
@@ -813,10 +841,42 @@ private:
         double legend = heading + h + 5;
         double plot_y = legend + h / 2 + 8 + (has_divergence ? h + 11 : 0);
         return { size, h, heading, legend,
-            RectF{ r.x + 40, plot_y, r.w - 50, r.bottomY() - 24 - plot_y } };
+            RectF{ r.x + 40, plot_y, r.w - 50, r.bottomY() - 24 - plot_y },
+            RectF{ r.rightX() - 30, heading - (h + 4) / 2, 28, h + 4 } };
     }
 
-    void draw_graph(const MatchView& m, const RectF& r, double s, int cursor_ply) {
+    void handle_replay_input(const MatchView& m, const RectF& r, double s, uint64_t now, stream::ReplayControl& playback) {
+        if (stream::ReplayControl::length(m) == 0) return;
+        auto geometry = graph_metrics(r, s, m.first_divergent_ply() >= 0);
+        if (selected_match == m.id && KeySpace.down()) {
+            if (playback.paused()) playback.resume(m, now);
+            else {
+                int ply = 0;
+                for (int i = 0; i < 2; ++i) ply = Max(ply, playback.frame(m, i, now).ply);
+                playback.seek(m, ply);
+            }
+        }
+        if (playback.paused() && geometry.play.mouseOver()) {
+            Cursor::RequestStyle(CursorStyle::Hand);
+            if (MouseL.down()) playback.resume(m, now);
+        }
+        RectF hit{ geometry.plot.x, geometry.plot.y, geometry.plot.w, geometry.plot.h + 18 };
+        if (hit.mouseOver()) {
+            Cursor::RequestStyle(CursorStyle::ResizeLeftRight);
+            if (MouseL.down()) {
+                dragging_match = m.id;
+                selected_match = m.id;
+                Cursor::SetCapture(true);
+            }
+        }
+        if (dragging_match == m.id) {
+            dragging_visible = true;
+            Cursor::RequestStyle(CursorStyle::ResizeLeftRight);
+            playback.seek_fraction(m, (Cursor::PosF().x - geometry.plot.x) / geometry.plot.w);
+        }
+    }
+
+    void draw_graph(const MatchView& m, const RectF& r, double s, int cursor_ply, bool paused) {
         RectF{ r.x, r.y, r.w, 1 }.draw(col::border);
         int split = m.first_divergent_ply();
         const auto geometry = graph_metrics(r, s, split >= 0);
@@ -827,7 +887,13 @@ private:
             Vec2{ r.x + 4, heading_y }, col::sub, r.w - 8);
         if (cursor_ply >= 0) {
             text(bold, U"Replay", label_size, Align::Right,
-                Vec2{ r.rightX() - 4, heading_y }, col::text, r.w - 90);
+                Vec2{ paused ? geometry.play.x - 8 : r.rightX() - 4, heading_y }, col::text, r.w - 90);
+            if (paused) {
+                geometry.play.draw(geometry.play.mouseOver() ? col::bg : col::panel);
+                geometry.play.drawFrame(1, col::border);
+                Vec2 c = geometry.play.center();
+                Triangle{ Vec2{ c.x - 4, c.y - 6 }, Vec2{ c.x - 4, c.y + 6 }, Vec2{ c.x + 6, c.y } }.draw(col::text);
+            }
         }
         // Identify the source of each estimate by name, rather than L/R codes.
         const double legend_y = geometry.legend_y;

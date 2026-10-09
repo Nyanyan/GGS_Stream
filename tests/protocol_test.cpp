@@ -342,6 +342,51 @@ static void test_synchro_divergence() {
     CHECK(match.first_divergent_ply() == 0);
 }
 
+static void test_replay_seek() {
+    stream::MatchView match;
+    ggs::Position start;
+    start.black = ggs::cell_bit(3 * 8 + 4) | ggs::cell_bit(4 * 8 + 3);
+    start.white = ggs::cell_bit(3 * 8 + 3) | ggs::cell_bit(4 * 8 + 4);
+    start.to_move = BLACK;
+    for (int i = 0; i < 2; ++i) {
+        auto& g = match.game[i];
+        g.active = g.finished = g.history_ok = true;
+        g.finished_ms = 1000;
+        g.start_empties = 5;
+        g.history.push_back(start);
+        auto pos = start;
+        for (int ply = 0; ply < (i == 0 ? 3 : 5); ++ply) {
+            uint64_t legal = stream::legal_moves(pos);
+            int cell = 0;
+            while (!(legal & ggs::cell_bit(cell))) ++cell;
+            CHECK(stream::apply_move(pos, false, cell));
+            g.history.push_back(pos);
+            g.history_cell.push_back(cell);
+        }
+    }
+    stream::ReplayControl control;
+    CHECK(stream::ReplayControl::length(match) == 5);
+    CHECK(control.seek_fraction(match, -1) && control.selected_ply == 0);
+    CHECK(control.frame(match, 0, 1000).active); // manual seek works before automatic replay starts
+    CHECK(control.seek_fraction(match, 0.5) && control.selected_ply == 3);
+    CHECK(control.seek(match, 2));
+    CHECK(control.frame(match, 0, 1000).ply == 2);
+    CHECK(control.frame(match, 1, 999999).ply == 2); // remains paused after release
+    CHECK(control.frame(match, 1, 999999).t == 1.0);
+    control.resume(match, 100000);
+    CHECK(!control.paused());
+    CHECK(control.frame(match, 1, 100000).ply == 2 && control.frame(match, 1, 100000).t == 1.0);
+    CHECK(control.frame(match, 1, 100000 + stream::REPLAY_STEP_MS).ply == 3);
+    CHECK(control.seek_fraction(match, 2) && control.selected_ply == 5);
+    CHECK(control.frame(match, 0, 0).ply == 3 && control.frame(match, 1, 0).ply == 5);
+    control.resume(match, 200000);
+    CHECK(control.frame(match, 1, 200000).ply == 5);
+    CHECK(control.frame(match, 1, 200000 + stream::REPLAY_END_HOLD_MS).ply == 0);
+    match.game[0].finished = false;
+    stream::ReplayControl live;
+    CHECK(!live.seek(match, 2) && !live.paused());
+}
+
 int main() {
     bit_init();
     mobility_init();
@@ -351,6 +396,7 @@ int main() {
     test_real_rankings();
     test_log_replay();
     test_synchro_divergence();
+    test_replay_seek();
     run_simulation(6, 1);
     run_simulation(4, 2);
     run_simulation(8, 3);
