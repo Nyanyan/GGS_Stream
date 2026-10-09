@@ -17,38 +17,41 @@ using stream::TournamentView;
 using stream::RoundStatus;
 
 namespace col {
-    inline constexpr ColorF bg{ 0.067, 0.078, 0.098 };
-    inline constexpr ColorF header{ 0.090, 0.106, 0.133 };
-    inline constexpr ColorF panel{ 0.090, 0.106, 0.133 };
-    inline constexpr ColorF panel2{ 0.118, 0.137, 0.169 };
-    inline constexpr ColorF border{ 0.176, 0.200, 0.239 };
-    inline constexpr ColorF text{ 0.929, 0.941, 0.957 };
-    inline constexpr ColorF sub{ 0.627, 0.667, 0.725 };
-    inline constexpr ColorF faint{ 0.443, 0.482, 0.545 };
-    inline constexpr ColorF accent[2] = { ColorF{ 0.961, 0.651, 0.137 }, ColorF{ 0.290, 0.678, 0.937 } };
-    inline constexpr ColorF win{ 0.271, 0.769, 0.486 };
-    inline constexpr ColorF loss{ 0.937, 0.353, 0.318 };
-    inline constexpr ColorF draw{ 0.741, 0.765, 0.800 };
-    inline constexpr ColorF warn{ 0.961, 0.741, 0.251 };
-    inline constexpr ColorF board{ 0.157, 0.482, 0.306 };
-    inline constexpr ColorF board_frame{ 0.078, 0.196, 0.133 };
-    inline constexpr ColorF grid{ 0.094, 0.329, 0.200 };
-    inline constexpr ColorF disc_black{ 0.067, 0.071, 0.078 };
-    inline constexpr ColorF disc_white{ 0.945, 0.949, 0.953 };
-    inline constexpr ColorF last_move{ 0.910, 0.235, 0.216 };
-    inline constexpr ColorF gold{ 0.976, 0.792, 0.322 };
-    inline constexpr ColorF silver{ 0.792, 0.820, 0.855 };
-    inline constexpr ColorF bronze{ 0.855, 0.580, 0.400 };
-    inline constexpr ColorF demo{ 0.851, 0.420, 0.957 };
-    // replays use a different tone so that they are never mistaken for live games
-    inline constexpr ColorF replay{ 0.682, 0.580, 0.980 };
-    inline constexpr ColorF board_replay{ 0.290, 0.345, 0.384 };
-    inline constexpr ColorF grid_replay{ 0.212, 0.255, 0.290 };
+    // Warm score sheet, ink, and the green of a physical Othello board.
+    inline constexpr ColorF bg{ 0.945, 0.945, 0.921 };
+    inline constexpr ColorF header{ 0.977, 0.977, 0.956 };
+    inline constexpr ColorF panel{ 0.998, 0.997, 0.984 };
+    inline constexpr ColorF panel2{ 0.950, 0.965, 0.934 };
+    inline constexpr ColorF border{ 0.655, 0.717, 0.655 };
+    inline constexpr ColorF text{ 0.063, 0.122, 0.086 };
+    inline constexpr ColorF sub{ 0.235, 0.310, 0.259 };
+    inline constexpr ColorF faint{ 0.345, 0.416, 0.361 };
+    // Player colours occupy full name bands and are identified by player names.
+    inline constexpr ColorF accent[2] = { ColorF{ 0.765, 0.310, 0.043 }, ColorF{ 0.039, 0.388, 0.631 } };
+    inline constexpr ColorF on_accent{ 1.0 };
+    inline constexpr ColorF win{ 0.043, 0.443, 0.220 };
+    inline constexpr ColorF loss{ 0.741, 0.188, 0.141 };
+    inline constexpr ColorF draw{ 0.405, 0.450, 0.410 };
+    inline constexpr ColorF warn{ 0.675, 0.353, 0.043 };
+    inline constexpr ColorF board{ 0.094, 0.502, 0.267 };
+    inline constexpr ColorF board_frame{ 0.024, 0.231, 0.114 };
+    inline constexpr ColorF grid{ 0.008, 0.173, 0.067 };
+    inline constexpr ColorF disc_black{ 0.080, 0.112, 0.091 };
+    inline constexpr ColorF disc_white{ 0.975, 0.967, 0.930 };
+    inline constexpr ColorF last_move{ 0.925, 0.216, 0.133 };
+    inline constexpr ColorF gold{ 0.678, 0.427, 0.031 };
+    inline constexpr ColorF silver{ 0.420, 0.490, 0.460 };
+    inline constexpr ColorF bronze{ 0.584, 0.400, 0.296 };
+    inline constexpr ColorF demo{ 0.455, 0.500, 0.455 };
+    // Replay boards are quiet and desaturated, with their own explicit label.
+    inline constexpr ColorF replay{ 0.196, 0.369, 0.263 };
+    inline constexpr ColorF board_replay{ 0.337, 0.510, 0.392 };
+    inline constexpr ColorF grid_replay{ 0.055, 0.192, 0.090 };
 }
 
 constexpr double SCENE_W = 1920;
 constexpr double SCENE_H = 1080;
-constexpr double MARGIN = 24;
+constexpr double MARGIN = 28;
 constexpr double HEADER_H = 76;
 constexpr double SIDEBAR_W = 380;
 constexpr double MIN_TEXT = 15; // smallest font size used on the stream
@@ -103,12 +106,12 @@ struct CardMetrics {
         m.side = side;
         m.board = board;
         m.s = Clamp(board / 330.0, 0.62, 1.45);
-        m.pad = 12 * m.s;
-        m.header = 74 * m.s;
-        m.strip = side ? 0 : 62 * m.s;
+        m.pad = 18 * m.s;
+        m.header = Max(66.0, 82 * m.s);
+        m.strip = side ? 0 : Max(64.0, 78 * m.s);
         m.side_w = side ? Max(126 * m.s, 104.0) : 0;
-        m.gap = 8 * m.s;
-        m.graph = 108 * m.s;
+        m.gap = 12 * m.s;
+        m.graph = Max(220.0, 220 * m.s);
         double unit_w = side ? m.side_w + m.gap + board : board;
         double unit_h = m.strip + board;
         if (horizontal) {
@@ -125,7 +128,7 @@ struct CardMetrics {
 struct GridLayout {
     CardMetrics card;
     int cols = 1, rows = 1;
-    double gap = 20;
+    double gap = 26;
 };
 
 /*
@@ -140,7 +143,7 @@ inline GridLayout solve_layout(int n, double area_w, double area_h) {
         bool side = (variant & 2) != 0;
         for (int cols = 1; cols <= n; ++cols) {
             int rows = (n + cols - 1) / cols;
-            double gap = 20;
+            double gap = 26;
             double lo = 40, hi = 1000;
             for (int it = 0; it < 40; ++it) {
                 double mid = (lo + hi) / 2;
@@ -205,11 +208,12 @@ public:
     void draw(const TournamentView& t, const AppInfo& info, uint64_t now) {
         RectF{ 0, 0, SCENE_W, SCENE_H }.draw(col::bg);
         draw_header(t, info, now);
-        RectF sidebar{ SCENE_W - MARGIN - SIDEBAR_W, HEADER_H + 20, SIDEBAR_W, SCENE_H - HEADER_H - 20 - MARGIN };
-        draw_sidebar(t, sidebar);
-        RectF main{ MARGIN, HEADER_H + 20, sidebar.x - MARGIN - 20, SCENE_H - HEADER_H - 20 - MARGIN };
+        RectF sidebar{ SCENE_W - MARGIN - SIDEBAR_W, HEADER_H + 28, SIDEBAR_W, SCENE_H - HEADER_H - 28 - MARGIN };
         bool focused = 0 <= info.focus && info.focus < (int)t.matches.size();
-        if (t.status == RoundStatus::Over && !t.rankings.empty() && !focused) {
+        bool results = t.status == RoundStatus::Over && !t.rankings.empty() && !focused;
+        RectF main{ MARGIN, HEADER_H + 28, sidebar.x - MARGIN - 26, sidebar.h };
+        draw_sidebar(t, sidebar);
+        if (results) {
             draw_podium(t, main);
         } else {
             draw_matches(t, main, now, focused ? info.focus : -1);
@@ -286,45 +290,45 @@ private:
         RectF{ 0, HEADER_H - 1, SCENE_W, 1 }.draw(col::border);
         double cy = HEADER_H / 2;
         double x = MARGIN + 4;
-        RectF title = text(heavy, info.title, 32, Align::Left, Vec2{ x, cy }, col::text, 820);
+        RectF title = text(bold, info.title, 27, Align::Left, Vec2{ x, cy }, col::text, 740);
         x = title.rightX() + 28;
         if (!info.badge.isEmpty()) {
-            x = text(bold, info.badge, 18, Align::Left, Vec2{ x, cy }, col::demo).rightX() + 24;
+            x = text(medium, info.badge, 16, Align::Left, Vec2{ x, cy }, col::sub).rightX() + 28;
         }
-        String round_label = t.round > 0 ? (t.rounds_total > 0 ? U"ROUND {} / {}"_fmt(t.round, t.rounds_total) : U"ROUND {}"_fmt(t.round)) : U"";
+        String round_label = t.round > 0 ? (t.rounds_total > 0 ? U"Round {} / {}"_fmt(t.round, t.rounds_total) : U"Round {}"_fmt(t.round)) : U"";
         switch (t.status) {
         case RoundStatus::Playing:
-            text(heavy, round_label, 28, Align::Left, Vec2{ x, cy }, col::text);
+            text(medium, round_label, 23, Align::Left, Vec2{ x, cy }, col::text);
             break;
         case RoundStatus::Break: {
-            RectF r = text(heavy, round_label + U" FINISHED", 28, Align::Left, Vec2{ x, cy }, col::sub);
-            double nx = r.rightX() + 30;
+            RectF r = text(medium, round_label + U" complete", 22, Align::Left, Vec2{ x, cy }, col::sub);
+            double nx = r.rightX() + 26;
             if (t.next_round_ms > now) {
                 int left = (int)((t.next_round_ms - now + 999) / 1000);
-                RectF l = text(heavy, U"NEXT ROUND IN", 28, Align::Left, Vec2{ nx, cy }, col::warn);
-                mono(heavy, digit_ratio_heavy, format_clock(left), 32, Align::Left, Vec2{ l.rightX() + 14, cy }, col::warn);
+                RectF l = text(medium, U"Next round in", 22, Align::Left, Vec2{ nx, cy }, col::sub);
+                mono(bold, digit_ratio_bold, format_clock(left), 26, Align::Left, Vec2{ l.rightX() + 12, cy }, col::text);
             } else {
-                text(heavy, U"NEXT ROUND STARTING", 28, Align::Left, Vec2{ nx, cy }, col::warn);
+                text(medium, U"Next round starting", 22, Align::Left, Vec2{ nx, cy }, col::text);
             }
             break;
         }
         case RoundStatus::Over:
-            text(heavy, U"FINAL RESULTS", 28, Align::Left, Vec2{ x, cy }, col::text);
+            text(medium, U"Tournament complete", 22, Align::Left, Vec2{ x, cy }, col::text);
             break;
         default:
-            text(bold, U"STANDBY", 20, Align::Left, Vec2{ x, cy }, col::sub);
+            text(medium, U"Standby", 20, Align::Left, Vec2{ x, cy }, col::sub);
             break;
         }
 
         double rx = SCENE_W - MARGIN;
-        RectF clock = mono(heavy, digit_ratio_heavy, DateTime::Now().format(U"HH:mm"), 32, Align::Right, Vec2{ rx, cy }, col::text);
+        RectF clock = mono(bold, digit_ratio_bold, DateTime::Now().format(U"HH:mm"), 29, Align::Right, Vec2{ rx, cy }, col::text);
         rx = clock.x - 28;
         if (now < info.toast_until_ms) {
             text(bold, info.toast, 20, Align::Right, Vec2{ rx, cy }, col::warn);
         } else if (!info.online) {
             text(bold, U"OFFLINE: " + info.connection, 18, Align::Right, Vec2{ rx, cy }, col::loss, 560);
         } else if (!t.matches.empty() && (t.status == RoundStatus::Playing || t.status == RoundStatus::Break)) {
-            text(bold, U"FINISHED {} / {}"_fmt(t.finished_matches(), t.matches.size()), 20, Align::Right, Vec2{ rx, cy }, col::sub);
+            text(medium, U"{} / {} matches complete"_fmt(t.finished_matches(), t.matches.size()), 19, Align::Right, Vec2{ rx, cy }, col::sub);
         }
     }
 
@@ -332,8 +336,7 @@ private:
         standings sidebar
     */
     void draw_sidebar(const TournamentView& t, const RectF& r) {
-        r.draw(col::panel);
-        r.drawFrame(1, 0, col::border);
+        RectF{ r.x, r.y, 1, r.h }.draw(col::border);
         RectF standings = r;
         if (t.status == RoundStatus::Break && !t.next_pairings.empty()) {
             double h = Min(66 + 34.0 * t.next_pairings.size(), r.h * 0.5);
@@ -350,8 +353,8 @@ private:
         double x0 = r.x + 20, x1 = r.rightX() - 20;
         RectF{ x0, r.y, x1 - x0, 1 }.draw(col::border);
         double y = r.y + 30;
-        text(heavy, U"NEXT ROUND", 22, Align::Left, Vec2{ x0, y }, col::text);
-        text(bold, U"ROUND {}"_fmt(t.next_round), 16, Align::Right, Vec2{ x1, y }, col::sub);
+        text(bold, U"Next round", 22, Align::Left, Vec2{ x0, y }, col::text);
+        text(medium, U"Round {}"_fmt(t.next_round), 16, Align::Right, Vec2{ x1, y }, col::sub);
         y += 22;
         double rh = Min(34.0, (r.bottomY() - 8 - y) / t.next_pairings.size());
         double size = Clamp(rh * 0.58, MIN_TEXT, 20.0);
@@ -368,12 +371,12 @@ private:
     void draw_standings(const TournamentView& t, const RectF& r) {
         double x0 = r.x + 20, x1 = r.rightX() - 20;
         double y = r.y + 32;
-        text(heavy, U"STANDINGS", 24, Align::Left, Vec2{ x0, y }, col::text);
+        text(bold, U"Standings", 26, Align::Left, Vec2{ x0, y }, col::text);
         if (t.status == RoundStatus::Over) {
-            text(bold, U"FINAL", 16, Align::Right, Vec2{ x1, y }, col::sub);
+            text(medium, U"Final", 16, Align::Right, Vec2{ x1, y }, col::sub);
         } else if (t.round > 0) {
             int done = t.status == RoundStatus::Break ? t.round : t.round - 1;
-            if (done > 0) text(bold, U"AFTER ROUND {}"_fmt(done), 16, Align::Right, Vec2{ x1, y }, col::sub);
+            if (done > 0) text(medium, U"After round {}"_fmt(done), 16, Align::Right, Vec2{ x1, y }, col::sub);
         }
         y += 38;
         double c_rank = x0 + 12, c_move = x0 + 33, c_name = x0 + 46, c_pts = x0 + 180, c_wdl = x0 + 248, c_disc = x1;
@@ -395,23 +398,22 @@ private:
             const auto& e = t.rankings[i];
             double cy = y + rh * (i + 0.5);
             if (cy + rh / 2 > r.bottomY() - 6) break;
-            if (i % 2 == 1) RectF{ r.x + 1, cy - rh / 2, r.w - 2, rh }.draw(ColorF{ 1, 1, 1, 0.025 });
-            ColorF rank_color = e.rank == 1 ? col::gold : e.rank == 2 ? col::silver : e.rank == 3 ? col::bronze : col::sub;
-            text(heavy, U"{}"_fmt(e.rank), size, Align::Center, Vec2{ c_rank, cy }, rank_color);
+            RectF{ x0, cy + rh / 2 - 0.5, x1 - x0, 1 }.draw(col::border);
+            ColorF rank_color = e.rank == 1 && t.status == RoundStatus::Over ? col::gold : col::sub;
+            text(bold, U"{}"_fmt(e.rank), size, Align::Center, Vec2{ c_rank, cy }, rank_color);
             int move = t.rank_change(e.row.name, e.rank);
             if (move != 0) {
                 double a = Clamp(size * 0.28, 4.0, 6.0);
                 if (move > 0) Triangle{ Vec2{ c_move, cy - a }, Vec2{ c_move + a, cy + a * 0.8 }, Vec2{ c_move - a, cy + a * 0.8 } }.draw(col::win);
                 else Triangle{ Vec2{ c_move, cy + a }, Vec2{ c_move - a, cy - a * 0.8 }, Vec2{ c_move + a, cy - a * 0.8 } }.draw(col::loss);
             }
-            text(bold, player_name(e.row.name), size, Align::Left, Vec2{ c_name, cy }, col::text, c_pts - 24 - c_name);
-            text(heavy, format_points(e.row.points), size, Align::Center, Vec2{ c_pts, cy }, col::text);
+            text(medium, player_name(e.row.name), size, Align::Left, Vec2{ c_name, cy }, col::text, c_pts - 24 - c_name);
+            text(bold, format_points(e.row.points), size, Align::Center, Vec2{ c_pts, cy }, col::text);
             if (e.row.has_record) {
                 text(medium, U"{}-{}-{}"_fmt(e.row.win, e.row.draw, e.row.loss), size * 0.92, Align::Center, Vec2{ c_wdl, cy }, col::sub, 82);
             }
             if (e.row.has_discs) {
-                ColorF dc = e.row.discs > 0.05 ? col::win : e.row.discs < -0.05 ? col::loss : col::sub;
-                text(medium, format_signed(e.row.discs), size * 0.92, Align::Right, Vec2{ c_disc, cy }, dc, 58);
+                text(medium, format_signed(e.row.discs), size * 0.92, Align::Right, Vec2{ c_disc, cy }, col::sub, 58);
             }
         }
     }
@@ -479,11 +481,13 @@ private:
 
     void draw_card(const MatchView& m, const RectF& card, const CardMetrics& c, uint64_t now) {
         const double s = c.s;
-        card.draw(col::panel);
-        card.drawFrame(1, 0, col::border);
+        card.draw(m.finished ? col::panel2 : col::panel);
+        RectF{ card.x, card.y, card.w, Max(2.0, 3 * s) }.draw(m.finished ? col::sub : col::board_frame);
+        RectF{ card.x, card.bottomY() - 1, card.w, 1 }.draw(col::border);
         RectF inner = card.stretched(-c.pad);
         draw_card_header(m, RectF{ inner.x, inner.y, inner.w, c.header }, s);
         double y = inner.y + c.header + c.gap;
+        RectF graph{ inner.x, y + (c.horizontal ? 1 : 2) * (c.strip + c.board + c.gap), inner.w, c.graph };
         stream::ReplayFrame frames[2] = { stream::replay_frame(m, 0, now), stream::replay_frame(m, 1, now) };
         auto draw_unit = [&](int i, double x, double uy, bool panel_left) {
             const GameView& g = m.game[i];
@@ -508,34 +512,37 @@ private:
                 y += c.strip + c.board + c.gap;
             }
         }
-        // replay cursor on the graph only when both games are replayed side by side
+        // The longer game's cursor keeps advancing if the shorter game has ended.
         int cursor = -1;
-        if (frames[0].active && frames[1].active) cursor = frames[0].ply;
-        draw_graph(m, RectF{ inner.x, y, inner.w, c.graph }, s, cursor);
+        for (const auto& f : frames) if (f.active) cursor = Max(cursor, f.ply);
+        draw_graph(m, graph, s, cursor);
     }
 
     void draw_card_header(const MatchView& m, const RectF& r, double s) {
-        double y1 = r.y + r.h * 0.36;
-        double y2 = r.y + r.h * 0.80;
+        double band_h = Max(32.0, 36 * s);
+        double y1 = r.y + band_h / 2 + 5;
+        double y2 = r.bottomY() - Max(13.0, 14 * s);
         int da = m.total_discs(0), db = m.total_discs(1);
         double score_size = 32 * s;
         String sa = U"{}"_fmt(da), sb = U"{}"_fmt(db);
         double half_score = Max(sa.size(), sb.size()) * digit_ratio_heavy * score_size + 14 * s;
-        double name_w = r.w / 2 - half_score - 22 * s;
         double result = 0;
         bool has_result = m.result_sum(result);
+        double name_w = r.w / 2 - half_score - Max(10.0, 10 * s);
         for (int i = 0; i < 2; ++i) {
             bool left = i == 0;
             double edge = left ? r.x : r.rightX();
             double dir = left ? 1 : -1;
             Align a = left ? Align::Left : Align::Right;
-            RectF{ left ? r.x : r.rightX() - 4 * s, y1 - 15 * s, 4 * s, 30 * s }.draw(col::accent[i]);
-            text(heavy, player_name(m.player[i]), fs(26 * s), a, Vec2{ edge + dir * 14 * s, y1 }, col::accent[i], name_w);
+            RectF name_band{ left ? edge : edge - name_w, y1 - band_h / 2, name_w, band_h };
+            name_band.draw(col::accent[i]);
+            double inset = Max(10.0, 10 * s);
+            text(bold, player_name(m.player[i]), fs(25 * s), a, Vec2{ edge + dir * inset, y1 }, col::on_accent, name_w - inset * 2);
             if (has_result) {
                 double mine = i == 0 ? result : -result;
                 String label = mine > 0 ? U"WIN" : mine < 0 ? U"LOSS" : U"DRAW";
-                ColorF c = mine > 0 ? col::win : mine < 0 ? col::loss : col::draw;
-                text(heavy, label, fs(18 * s), a, Vec2{ edge + dir * 14 * s, y2 }, c);
+                ColorF c = mine > 0 ? col::text : col::sub;
+                text(medium, label, fs(16 * s), a, Vec2{ edge + dir * 4 * s, y2 }, c);
             }
         }
         double cx = r.centerX();
@@ -543,7 +550,7 @@ private:
         RectF{ cx - 5 * s, y1 - 1.5 * s, 10 * s, 3 * s }.draw(col::faint);
         mono(heavy, digit_ratio_heavy, sb, score_size, Align::Left, Vec2{ cx + 12 * s, y1 }, col::text);
         if (has_result) {
-            text(bold, U"FINAL " + format_signed(result), fs(16 * s), Align::Center, Vec2{ cx, y2 }, col::sub);
+            text(medium, U"final " + format_signed(result), fs(16 * s), Align::Center, Vec2{ cx, y2 }, col::sub);
         } else if (!m.joined()) {
             text(bold, U"connecting", fs(16 * s), Align::Center, Vec2{ cx, y2 }, col::faint);
         }
@@ -578,23 +585,34 @@ private:
             double size = fs(15 * s);
             RectF band{ r.x, r.centerY() - size * 0.9, r.w, size * 1.8 };
             band.draw(col::replay);
-            text(heavy, U"REPLAY {}/{}"_fmt(f.ply, f.n), size, Align::Center, band.center(), col::bg, band.w - 8 * s);
+            text(heavy, U"REPLAY", size, Align::Center, band.center(), col::bg, band.w - 8 * s);
         }
         for (int color = 0; color < 2; ++color) {
             RectF h{ r.x, r.y + (color == BLACK ? 0 : r.h / 2), r.w, r.h / 2 };
             PlayerStyle st = player_style(m, g, color);
-            if (st.to_move) {
-                RectF{ panel_left ? h.rightX() - 5 * s : h.x, h.y + 1, 5 * s, h.h - 2 }.draw(st.accent);
-            }
             double x = h.x + 12 * s;
             double dr = 8 * s;
-            double y_name = h.y + (color == BLACK ? h.h * 0.17 : h.h * 0.21);
+            double band_h = Max(30.0, 32 * s);
+            double top_pad = f.active ? fs(15 * s) * 0.9 + 8 : Max(8.0, 8 * s);
+            double y_name = h.y + top_pad + band_h / 2;
+            RectF{ h.x, y_name - band_h / 2, h.w, band_h }.draw(st.accent);
+            if (st.to_move) {
+                double bar_w = Max(6.0, 6 * s);
+                RectF{ panel_left ? h.rightX() - bar_w : h.x, h.y, bar_w, h.h }.draw(st.accent);
+            }
+            Circle{ x + dr, y_name, dr + 3 * s }.draw(col::panel);
             disc(Vec2{ x + dr, y_name }, dr, color);
             double name_x = x + dr * 2 + 8 * s;
             if (!g.active) continue;
-            text(bold, player_name(g.name[color]), fs(19 * s), Align::Left, Vec2{ name_x, y_name }, st.accent, h.rightX() - 10 * s - name_x);
-            mono(heavy, digit_ratio_heavy, U"{}"_fmt(g.discs(color)), 48 * s, Align::Left, Vec2{ x - 2 * s, h.y + h.h * 0.47 }, col::text);
-            double y_clock = h.y + h.h * 0.76;
+            text(bold, player_name(g.name[color]), fs(19 * s), Align::Left, Vec2{ name_x, y_name }, col::on_accent, h.rightX() - 10 * s - name_x);
+            double y_clock = h.y + h.h * 0.81;
+            double clock_h = bold(U"00:00").region(fs(23 * s)).h;
+            double count_top = y_name + band_h / 2 + 6;
+            double count_bottom = y_clock - clock_h / 2 - 6;
+            double count_size = Min(48 * s, Max(15.0, (count_bottom - count_top) * 48 / heavy(U"64").region(48).h));
+            int count = f.active ? stream::disc_count(g.history[f.ply], color) : g.discs(color);
+            mono(heavy, digit_ratio_heavy, U"{}"_fmt(count), count_size, Align::Left,
+                Vec2{ x - 2 * s, (count_top + count_bottom) / 2 }, col::text);
             if (g.finished) {
                 draw_game_score(g, color, fs(23 * s), Align::Left, Vec2{ x, y_clock });
             } else if (g.has_clock) {
@@ -616,23 +634,27 @@ private:
         area.draw(col::panel2);
         RectF{ area.centerX(), area.y, 1, area.h }.draw(col::border);
         double half = area.w / 2;
-        double y1 = area.y + area.h * 0.28;
-        double y2 = area.y + area.h * 0.70;
+        double band_h = Max(30.0, 32 * s);
+        double bar_h = Max(6.0, 6 * s);
+        double y1 = area.y + band_h / 2;
+        double y2 = (area.y + band_h + area.bottomY() - bar_h) / 2;
         for (int color = 0; color < 2; ++color) {
             bool left = color == BLACK;
             RectF h{ left ? area.x : area.x + half, area.y, half, area.h };
             PlayerStyle st = player_style(m, g, color);
-            if (st.to_move) RectF{ h.x, h.bottomY() - 4 * s, h.w, 4 * s }.draw(st.accent);
+            RectF{ h.x, h.y, h.w, band_h }.draw(st.accent);
+            if (st.to_move) RectF{ h.x, h.bottomY() - bar_h, h.w, bar_h }.draw(st.accent);
             double dir = left ? 1 : -1;
             double edge = left ? h.x + 8 * s : h.rightX() - 8 * s;
             double inner = left ? h.rightX() - 8 * s : h.x + 8 * s;
             Align a = left ? Align::Left : Align::Right;
             Align b = left ? Align::Right : Align::Left;
             double dr = 7 * s;
+            Circle{ edge + dir * dr, y1, dr + 2 * s }.draw(col::panel);
             disc(Vec2{ edge + dir * dr, y1 }, dr, color);
             if (!g.active) continue;
             double name_x = edge + dir * (dr * 2 + 6 * s);
-            text(bold, player_name(g.name[color]), fs(18 * s), a, Vec2{ name_x, y1 }, st.accent, std::abs(inner - name_x));
+            text(bold, player_name(g.name[color]), fs(18 * s), a, Vec2{ name_x, y1 }, col::on_accent, std::abs(inner - name_x));
             if (!f.active) {
                 mono(heavy, digit_ratio_heavy, U"{}"_fmt(g.discs(color)), fs(26 * s), b, Vec2{ inner, y2 }, col::text);
             }
@@ -723,10 +745,42 @@ private:
         }
     }
 
+    struct GraphMetrics {
+        double size, label_h, heading_y, legend_y;
+        RectF plot;
+    };
+
+    GraphMetrics graph_metrics(const RectF& r, double s) const {
+        double size = fs(14 * s);
+        double h = medium(U"Evaluation").region(size).h;
+        double heading = r.y + h / 2 + 2;
+        double legend = heading + h + 5;
+        double plot_y = legend + h / 2 + 8;
+        return { size, h, heading, legend,
+            RectF{ r.x + 40, plot_y, r.w - 50, r.bottomY() - 24 - plot_y } };
+    }
+
     void draw_graph(const MatchView& m, const RectF& r, double s, int cursor_ply) {
-        r.draw(col::panel2);
-        double label_w = 34 * s;
-        RectF plot{ r.x + label_w, r.y + 10 * s, r.w - label_w - 12 * s, r.h - 20 * s };
+        RectF{ r.x, r.y, r.w, 1 }.draw(col::border);
+        const auto geometry = graph_metrics(r, s);
+        const double label_size = geometry.size;
+        const double heading_y = geometry.heading_y;
+        text(medium, U"Evaluation", label_size, Align::Left,
+            Vec2{ r.x + 4, heading_y }, col::sub, r.w - 8);
+        if (cursor_ply >= 0) {
+            text(bold, U"Replay", label_size, Align::Right,
+                Vec2{ r.rightX() - 4, heading_y }, col::text, r.w - 90);
+        }
+        // Identify the source of each estimate by name, rather than L/R codes.
+        const double legend_y = geometry.legend_y;
+        for (int i = 0; i < 2; ++i) {
+            double x = r.x + 4 + i * r.w / 2;
+            RectF{ x, legend_y - 2, 35, 4 }.draw(col::accent[i]);
+            text(medium, player_name(m.player[i]), label_size, Align::Left,
+                Vec2{ x + 43, legend_y }, col::text, r.w / 2 - 53);
+        }
+        RectF plot = geometry.plot;
+        // Always draw the complete series, including moves beyond the replay cursor.
         auto sa = m.eval_series(0);
         auto sb = m.eval_series(1);
         double maxabs = 0;
@@ -741,28 +795,36 @@ private:
         auto px = [&](double ply) { return plot.x + plot.w * Clamp(ply / xmax, 0.0, 1.0); };
         auto py = [&](double v) { return plot.centerY() - Clamp(v / range, -1.0, 1.0) * plot.h / 2; };
 
-        RectF{ plot.x, plot.y, plot.w, 1 }.draw(ColorF{ 1, 1, 1, 0.06 });
-        RectF{ plot.x, plot.bottomY() - 1, plot.w, 1 }.draw(ColorF{ 1, 1, 1, 0.06 });
-        RectF{ plot.x, plot.centerY() - 0.5, plot.w, 1 }.draw(ColorF{ 1, 1, 1, 0.22 });
-        double size = fs(13 * s);
-        double lx = plot.x - 8 * s;
-        text(bold, U"{}"_fmt((int)range), size, Align::Right, Vec2{ lx, plot.y + size * 0.35 }, col::accent[0]);
-        text(bold, U"0", size, Align::Right, Vec2{ lx, plot.centerY() }, col::faint);
-        text(bold, U"{}"_fmt((int)range), size, Align::Right, Vec2{ lx, plot.bottomY() - size * 0.35 }, col::accent[1]);
+        plot.draw(col::panel);
 
-        if (cursor_ply >= 0) {
-            RectF{ px(cursor_ply) - 1, plot.y, 2, plot.h }.draw(ColorF{ 1, 1, 1, 0.45 });
-        }
-        auto draw_series = [&](const std::vector<std::pair<int, double>>& series, double sign, const ColorF& c) {
+        RectF{ plot.x, plot.y, plot.w, 1 }.draw(ColorF{ col::text, 0.10 });
+        RectF{ plot.x, plot.bottomY() - 1, plot.w, 1 }.draw(ColorF{ col::text, 0.10 });
+        RectF{ plot.x, plot.centerY() - 0.5, plot.w, 1 }.draw(ColorF{ col::text, 0.28 });
+        double size = fs(13 * s);
+        double lx = plot.x - 7;
+        text(medium, U"+{}"_fmt((int)range), size, Align::Right, Vec2{ lx, plot.y + size * 0.35 }, col::sub);
+        text(medium, U"0", size, Align::Right, Vec2{ lx, plot.centerY() }, col::faint);
+        text(medium, U"-{}"_fmt((int)range), size, Align::Right, Vec2{ lx, plot.bottomY() - size * 0.35 }, col::sub);
+        const double axis_y = plot.bottomY() + 13;
+        text(medium, U"0", size, Align::Left, Vec2{ plot.x, axis_y }, col::sub);
+        int middle_ply = (int)(xmax / 2);
+        text(medium, U"{}"_fmt(middle_ply), size, Align::Center, Vec2{ px(middle_ply), axis_y }, col::sub);
+        text(medium, U"{}"_fmt((int)xmax), size, Align::Right, Vec2{ plot.rightX(), axis_y }, col::sub);
+
+        auto draw_series = [&](const std::vector<std::pair<int, double>>& series, double sign, int idx) {
             if (series.empty()) return;
             LineString ls;
             for (auto& p : series) ls << Vec2{ px(p.first), py(sign * p.second) };
-            if (ls.size() >= 2) ls.draw(2.5 * s, c);
-            Circle{ ls.back(), 3.5 * s }.draw(c);
+            if (ls.size() >= 2) ls.draw(Max(3.0, 3.0 * s), col::accent[idx]);
         };
         // both in player[0]'s frame: upper half = player[0] ahead
-        draw_series(sb, -1.0, col::accent[1]);
-        draw_series(sa, 1.0, col::accent[0]);
+        draw_series(sb, -1.0, 1);
+        draw_series(sa, 1.0, 0);
+
+        if (cursor_ply >= 0) {
+            double x = px(cursor_ply);
+            RectF{ x - 1.5, plot.y, 3, plot.h }.draw(col::text);
+        }
     }
 
     void draw_debug(const TournamentView& t, const AppInfo& info) {
