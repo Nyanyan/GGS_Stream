@@ -47,6 +47,7 @@ namespace col {
     inline constexpr ColorF replay{ 0.196, 0.369, 0.263 };
     inline constexpr ColorF board_replay{ 0.337, 0.510, 0.392 };
     inline constexpr ColorF grid_replay{ 0.055, 0.192, 0.090 };
+    inline constexpr ColorF graph_diverged{ 0.855, 0.887, 0.839 };
 }
 
 constexpr double SCENE_W = 1920;
@@ -805,20 +806,22 @@ private:
         RectF plot;
     };
 
-    GraphMetrics graph_metrics(const RectF& r, double s) const {
+    GraphMetrics graph_metrics(const RectF& r, double s, bool has_divergence) const {
         double size = fs(14 * s);
-        double h = medium(U"Evaluation").region(size).h;
+        double h = Max(medium(U"Evaluation").region(size).h, bold(U"Diverged").region(size).h);
         double heading = r.y + h / 2 + 2;
         double legend = heading + h + 5;
-        double plot_y = legend + h / 2 + 8;
+        double plot_y = legend + h / 2 + 8 + (has_divergence ? h + 11 : 0);
         return { size, h, heading, legend,
             RectF{ r.x + 40, plot_y, r.w - 50, r.bottomY() - 24 - plot_y } };
     }
 
     void draw_graph(const MatchView& m, const RectF& r, double s, int cursor_ply) {
         RectF{ r.x, r.y, r.w, 1 }.draw(col::border);
-        const auto geometry = graph_metrics(r, s);
+        int split = m.first_divergent_ply();
+        const auto geometry = graph_metrics(r, s, split >= 0);
         const double label_size = geometry.size;
+        const double label_h = geometry.label_h;
         const double heading_y = geometry.heading_y;
         text(medium, U"Evaluation", label_size, Align::Left,
             Vec2{ r.x + 4, heading_y }, col::sub, r.w - 8);
@@ -851,7 +854,10 @@ private:
         auto py = [&](double v) { return plot.centerY() - Clamp(v / range, -1.0, 1.0) * plot.h / 2; };
 
         plot.draw(col::panel);
-
+        if (split >= 0) {
+            double x = px(split);
+            RectF{ x, plot.y, plot.rightX() - x, plot.h }.draw(col::graph_diverged);
+        }
         RectF{ plot.x, plot.y, plot.w, 1 }.draw(ColorF{ col::text, 0.10 });
         RectF{ plot.x, plot.bottomY() - 1, plot.w, 1 }.draw(ColorF{ col::text, 0.10 });
         RectF{ plot.x, plot.centerY() - 0.5, plot.w, 1 }.draw(ColorF{ col::text, 0.28 });
@@ -875,7 +881,19 @@ private:
         // both in player[0]'s frame: upper half = player[0] ahead
         draw_series(sb, -1.0, 1);
         draw_series(sa, 1.0, 0);
-
+        if (split >= 0) {
+            double x = px(split);
+            bool reached = cursor_ply < 0 || cursor_ply >= split;
+            String label = U"Diverged";
+            double w = bold(label).region(label_size).w + 16;
+            RectF tag{ Clamp(x - w / 2, plot.x, plot.rightX() - w), plot.y - label_h - 11, w, label_h + 4 };
+            // The pointer and divider share the exact move coordinate, even when the label is clamped at an edge.
+            RectF{ x - 1, plot.y, 2, plot.h }.draw(col::sub);
+            tag.draw(reached ? col::text : col::panel);
+            if (!reached) tag.drawFrame(1.5, col::sub);
+            text(bold, label, label_size, Align::Center, tag.center(), reached ? col::on_accent : col::sub);
+            Triangle{ Vec2{ x - 4, tag.bottomY() }, Vec2{ x + 4, tag.bottomY() }, Vec2{ x, plot.y - 1 } }.draw(reached ? col::text : col::sub);
+        }
         if (cursor_ply >= 0) {
             double x = px(cursor_ply);
             RectF{ x - 1.5, plot.y, 3, plot.h }.draw(col::text);

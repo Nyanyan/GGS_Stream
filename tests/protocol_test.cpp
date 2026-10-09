@@ -303,6 +303,45 @@ static void run_simulation(int n_players, uint64_t seed) {
     std::cout << "simulation " << n_players << " players: rounds " << matches_per_round.size() << ", eval points " << eval_points << ", series points " << series_points << ", sim time " << (now / 1000) << " s" << std::endl;
 }
 
+static void test_synchro_divergence() {
+    stream::MatchView match;
+    ggs::Position start;
+    start.black = ggs::cell_bit(3 * 8 + 4) | ggs::cell_bit(4 * 8 + 3);
+    start.white = ggs::cell_bit(3 * 8 + 3) | ggs::cell_bit(4 * 8 + 4);
+    start.to_move = BLACK;
+    for (auto& game : match.game) {
+        game.history_ok = true;
+        game.history.push_back(start);
+    }
+    CHECK(match.first_divergent_ply() == -1);
+    auto first = start;
+    CHECK(stream::apply_move(first, false, 2 * 8 + 3));
+    match.game[0].history.push_back(first);
+    CHECK(match.first_divergent_ply() == -1); // one game is ahead in time
+    match.game[1].history.push_back(first);
+    CHECK(match.first_divergent_ply() == -1);
+    std::vector<ggs::Position> replies;
+    uint64_t legal = stream::legal_moves(first);
+    for (int cell = 0; cell < HW2; ++cell) {
+        if ((legal & ggs::cell_bit(cell)) == 0) continue;
+        auto next = first;
+        CHECK(stream::apply_move(next, false, cell));
+        replies.push_back(next);
+    }
+    CHECK(replies.size() >= 2);
+    match.game[0].history.push_back(replies[0]);
+    match.game[1].history.push_back(replies[1]);
+    CHECK(match.first_divergent_ply() == 2);
+    match.game[0].history.push_back(replies[1]);
+    match.game[1].history.push_back(replies[1]);
+    CHECK(match.first_divergent_ply() == 2); // the first split remains marked
+    match.game[1].history_ok = false;
+    CHECK(match.first_divergent_ply() == -1); // incomplete history is not evidence
+    match.game[1].history_ok = true;
+    match.game[1].history[0].to_move = WHITE;
+    CHECK(match.first_divergent_ply() == 0);
+}
+
 int main() {
     bit_init();
     mobility_init();
@@ -311,6 +350,7 @@ int main() {
     test_forced_eval();
     test_real_rankings();
     test_log_replay();
+    test_synchro_divergence();
     run_simulation(6, 1);
     run_simulation(4, 2);
     run_simulation(8, 3);

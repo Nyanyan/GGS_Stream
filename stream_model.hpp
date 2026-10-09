@@ -240,6 +240,16 @@ struct MatchView {
     int x_max() const {
         return std::max(game[0].x_max(), game[1].x_max());
     }
+
+    // Compare only plies known in both games. Unequal arrival times are not a split.
+    int first_divergent_ply() const {
+        if (!game[0].history_ok || !game[1].history_ok) return -1;
+        size_t n = std::min(game[0].history.size(), game[1].history.size());
+        for (size_t ply = 0; ply < n; ++ply) {
+            if (!(game[0].history[ply] == game[1].history[ply])) return (int)ply;
+        }
+        return -1;
+    }
 };
 
 /*
