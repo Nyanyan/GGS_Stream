@@ -564,8 +564,6 @@ private:
 
     void draw_card(const MatchView& m, const RectF& card, const CardMetrics& c, uint64_t now) {
         const double s = c.s;
-        RectF{ card.x, card.y, card.w, Max(2.0, 3 * s) }.draw(col::board_frame);
-        RectF{ card.x, card.bottomY() - 1, card.w, 1 }.draw(col::border);
         RectF inner = card.stretched(-c.pad);
         draw_card_header(m, RectF{ inner.x, inner.y, inner.w, c.header }, s);
         double y = inner.y + c.header + c.gap;
