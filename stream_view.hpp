@@ -211,11 +211,11 @@ public:
         RectF sidebar{ SCENE_W - MARGIN - SIDEBAR_W, HEADER_H + 28, SIDEBAR_W, SCENE_H - HEADER_H - 28 - MARGIN };
         bool focused = 0 <= info.focus && info.focus < (int)t.matches.size();
         bool results = t.status == RoundStatus::Over && !t.rankings.empty() && !focused;
-        RectF main{ MARGIN, HEADER_H + 28, sidebar.x - MARGIN - 26, sidebar.h };
-        draw_sidebar(t, sidebar);
+        RectF main{ MARGIN, HEADER_H + 28, results ? SCENE_W - MARGIN * 2 : sidebar.x - MARGIN - 26, sidebar.h };
         if (results) {
-            draw_podium(t, main);
+            draw_results(t, main);
         } else {
+            draw_sidebar(t, sidebar);
             draw_matches(t, main, now, focused ? info.focus : -1);
         }
         if (info.debug) draw_debug(t, info);
@@ -419,33 +419,88 @@ private:
     }
 
     /*
-        final standings: top three on a podium
+        Final results read in order: winner, medal places, remaining players.
+        Names and points lead; records are supporting information.
     */
-    void draw_podium(const TournamentView& t, const RectF& area) {
-        text(heavy, U"FINAL STANDINGS", 44, Align::Center, Vec2{ area.centerX(), area.y + 70 }, col::text);
-        int n = (int)Min<size_t>(3, t.rankings.size());
-        const int order[3] = { 1, 0, 2 }; // 2nd, 1st, 3rd from the left
-        const double heights[3] = { 380, 290, 230 };
-        const ColorF colors[3] = { col::gold, col::silver, col::bronze };
-        double cw = 340, gap = 40;
-        double total = 3 * cw + 2 * gap;
-        double x0 = area.centerX() - total / 2;
-        double base = area.bottomY() - 40;
-        for (int slot = 0; slot < 3; ++slot) {
-            int i = order[slot];
-            if (i >= n) continue;
-            const auto& e = t.rankings[i];
-            double x = x0 + slot * (cw + gap);
-            RectF block{ x, base - heights[i], cw, heights[i] };
-            block.draw(colors[i]);
-            text(heavy, U"{}"_fmt(e.rank), 110, Align::Center, Vec2{ block.centerX(), block.y + 80 }, col::bg);
-            double y = block.y - 150;
-            text(heavy, player_name(e.row.name), 48, Align::Center, Vec2{ block.centerX(), y }, col::text, cw);
-            text(heavy, format_points(e.row.points) + U" pts", 30, Align::Center, Vec2{ block.centerX(), y + 56 }, colors[i]);
-            String detail;
-            if (e.row.has_record) detail += U"{}-{}-{}"_fmt(e.row.win, e.row.draw, e.row.loss);
-            if (e.row.has_discs) detail += String{ detail.isEmpty() ? U"" : U"   " } + U"disc " + format_signed(e.row.discs);
-            text(medium, detail, 22, Align::Center, Vec2{ block.centerX(), y + 98 }, col::sub, cw);
+    void draw_results(const TournamentView& t, const RectF& area) {
+        int n = (int)t.rankings.size();
+        if (n == 0) return;
+        const double x = area.x + 28;
+        const double width = area.w - 56;
+        text(medium, U"Final results", 32, Align::Left, Vec2{ x, area.y + 52 }, col::text);
+        text(medium, U"{} players  /  {} rounds"_fmt(n, t.round), 18, Align::Right,
+            Vec2{ x + width, area.y + 57 }, col::sub);
+        RectF{ x, area.y + 98, width, 2 }.draw(col::board_frame);
+
+        // More than twelve entrants use balanced columns; no ranking is omitted.
+        int columns = (n + 11) / 12;
+        int rows = (n + columns - 1) / columns;
+        double gap = 40;
+        double cw = (width - (columns - 1) * gap) / columns;
+        double top = area.y + 161;
+        auto row_weight = [](int rank) { return rank == 1 ? 1.75 : 1 < rank && rank <= 3 ? 1.18 : 1.0; };
+        double max_weight = 0;
+        for (int column = 0; column < columns; ++column) {
+            double weight = 0;
+            for (int i = column * rows; i < Min(n, (column + 1) * rows); ++i) weight += row_weight(t.rankings[i].rank);
+            max_weight = Max(max_weight, weight);
+        }
+        double row_unit = Min(100.0, (area.bottomY() - top - 20) / max_weight);
+        for (int column = 0; column < columns; ++column) {
+            double cx = x + column * (cw + gap);
+            double rank_x = cx + 20;
+            double name_x = cx + cw * 0.10;
+            double points_x = cx + cw * 0.52;
+            double wins_x = cx + cw * 0.62;
+            double draws_x = cx + cw * 0.70;
+            double losses_x = cx + cw * 0.78;
+            double discs_x = cx + cw - 20;
+            double hy = top - 28;
+            double heading_size = columns >= 3 ? 15 : 18;
+            text(medium, columns >= 3 ? U"#" : U"Rank", heading_size, Align::Left, Vec2{ rank_x, hy }, col::sub);
+            text(medium, U"Player", heading_size, Align::Left, Vec2{ name_x, hy }, col::sub);
+            text(medium, U"Points", heading_size, Align::Center, Vec2{ points_x, hy }, col::sub);
+            text(medium, U"Wins", heading_size, Align::Center, Vec2{ wins_x, hy }, col::sub);
+            text(medium, U"Draws", heading_size, Align::Center, Vec2{ draws_x, hy }, col::sub);
+            text(medium, U"Losses", heading_size, Align::Center, Vec2{ losses_x, hy }, col::sub);
+            text(medium, columns >= 3 ? U"Avg. diff." : U"Avg. disc diff.", heading_size, Align::Right,
+                Vec2{ discs_x, hy }, col::sub, discs_x - losses_x - 40);
+            double row_y = top;
+            for (int row = 0; row < rows; ++row) {
+                int i = column * rows + row;
+                if (i >= n) break;
+                const auto& e = t.rankings[i];
+                bool champion = e.rank == 1;
+                bool medal = 1 < e.rank && e.rank <= 3;
+                RectF line{ cx, row_y, cw, row_unit * row_weight(e.rank) };
+                double y = line.centerY();
+                double name_size = champion ? Min(columns == 1 ? 72.0 : 60.0, line.h * 0.50)
+                    : medal ? Min(44.0, line.h * 0.45) : Clamp(line.h * 0.37, 21.0, 28.0);
+                double points_size = champion ? name_size * 0.88 : medal ? Min(42.0, line.h * 0.43) : name_size;
+                double rank_size = champion ? name_size * 0.65 : medal ? 30.0 : 22.0;
+                double secondary_size = champion ? 21.0 : medal ? 20.0 : 18.0;
+                const Font& name_font = champion ? heavy : medal ? bold : medium;
+                const Font& points_font = champion ? heavy : medal ? bold : medium;
+                text(medium, U"{:0>2}"_fmt(e.rank), rank_size, Align::Left, Vec2{ rank_x, y }, champion ? col::gold : col::faint);
+                text(name_font, player_name(e.row.name), name_size, Align::Left,
+                    Vec2{ name_x, y }, col::text, points_x - name_x - 70);
+                text(points_font, format_points(e.row.points), points_size, Align::Center, Vec2{ points_x, y }, col::text);
+                text(medium, e.row.has_record ? U"{}"_fmt(e.row.win) : U"\u2014", secondary_size, Align::Center, Vec2{ wins_x, y }, col::sub);
+                text(medium, e.row.has_record ? U"{}"_fmt(e.row.draw) : U"\u2014", secondary_size, Align::Center, Vec2{ draws_x, y }, col::sub);
+                text(medium, e.row.has_record ? U"{}"_fmt(e.row.loss) : U"\u2014", secondary_size, Align::Center, Vec2{ losses_x, y }, col::sub);
+                // Disc difference deserves emphasis when it separates equal points.
+                auto separates_tie = [&](int other) {
+                    if (other < 0 || other >= n) return false;
+                    const auto& r = t.rankings[other].row;
+                    return e.row.has_discs && r.has_discs && std::abs(e.row.points - r.points) < 1e-6
+                        && std::abs(e.row.discs - r.discs) > 1e-6;
+                };
+                bool tie_break = separates_tie(i - 1) || separates_tie(i + 1);
+                text(tie_break ? bold : medium, e.row.has_discs ? format_signed(e.row.discs) : U"\u2014",
+                    secondary_size + (tie_break ? 2 : 0), Align::Right, Vec2{ discs_x, y }, tie_break ? col::text : col::sub);
+                RectF{ line.x, line.bottomY() - 1, line.w, champion ? 2.0 : 1.0 }.draw(col::border);
+                row_y = line.bottomY();
+            }
         }
     }
 
