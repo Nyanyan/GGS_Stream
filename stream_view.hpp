@@ -18,10 +18,8 @@ using stream::RoundStatus;
 
 namespace col {
     // Warm score sheet, ink, and the green of a physical Othello board.
+    // One shared background; coloured fills identify players or a state.
     inline constexpr ColorF bg{ 0.945, 0.945, 0.921 };
-    inline constexpr ColorF header{ 0.977, 0.977, 0.956 };
-    inline constexpr ColorF panel{ 0.998, 0.997, 0.984 };
-    inline constexpr ColorF panel2{ 0.950, 0.965, 0.934 };
     inline constexpr ColorF border{ 0.655, 0.717, 0.655 };
     inline constexpr ColorF text{ 0.063, 0.122, 0.086 };
     inline constexpr ColorF sub{ 0.235, 0.310, 0.259 };
@@ -47,7 +45,7 @@ namespace col {
     inline constexpr ColorF replay{ 0.196, 0.369, 0.263 };
     inline constexpr ColorF board_replay{ 0.337, 0.510, 0.392 };
     inline constexpr ColorF grid_replay{ 0.055, 0.192, 0.090 };
-    inline constexpr ColorF graph_diverged{ 0.855, 0.887, 0.839 };
+    inline constexpr ColorF graph_diverged{ 0.827, 0.827, 0.800 };
 }
 
 constexpr double SCENE_W = 1920;
@@ -317,7 +315,6 @@ private:
         header bar
     */
     void draw_header(const TournamentView& t, const AppInfo& info, uint64_t now) {
-        RectF{ 0, 0, SCENE_W, HEADER_H }.draw(col::header);
         RectF{ 0, HEADER_H - 1, SCENE_W, 1 }.draw(col::border);
         double cy = HEADER_H / 2;
         double x = MARGIN + 4;
@@ -567,8 +564,7 @@ private:
 
     void draw_card(const MatchView& m, const RectF& card, const CardMetrics& c, uint64_t now) {
         const double s = c.s;
-        card.draw(m.finished ? col::panel2 : col::panel);
-        RectF{ card.x, card.y, card.w, Max(2.0, 3 * s) }.draw(m.finished ? col::sub : col::board_frame);
+        RectF{ card.x, card.y, card.w, Max(2.0, 3 * s) }.draw(col::board_frame);
         RectF{ card.x, card.bottomY() - 1, card.w, 1 }.draw(col::border);
         RectF inner = card.stretched(-c.pad);
         draw_card_header(m, RectF{ inner.x, inner.y, inner.w, c.header }, s);
@@ -681,7 +677,6 @@ private:
         player panel beside a board: black on top, white below
     */
     void draw_side(const MatchView& m, const GameView& g, const stream::ReplayFrame& f, const RectF& r, double s, uint64_t now, bool panel_left) {
-        r.draw(col::panel2);
         RectF{ r.x, r.centerY(), r.w, 1 }.draw(col::border);
         if (f.active) {
             double size = fs(15 * s);
@@ -702,7 +697,7 @@ private:
                 double bar_w = Max(6.0, 6 * s);
                 RectF{ panel_left ? h.rightX() - bar_w : h.x, h.y, bar_w, h.h }.draw(st.accent);
             }
-            Circle{ x + dr, y_name, dr + 3 * s }.draw(col::panel);
+            Circle{ x + dr, y_name, dr + 3 * s }.draw(col::bg);
             disc(Vec2{ x + dr, y_name }, dr, color);
             double name_x = x + dr * 2 + 8 * s;
             if (!g.active) continue;
@@ -732,7 +727,6 @@ private:
     */
     void draw_strip(const MatchView& m, const GameView& g, const stream::ReplayFrame& f, const RectF& r, double s, uint64_t now) {
         RectF area{ r.x, r.y, r.w, r.h - 4 * s };
-        area.draw(col::panel2);
         RectF{ area.centerX(), area.y, 1, area.h }.draw(col::border);
         double half = area.w / 2;
         double band_h = Max(30.0, 32 * s);
@@ -751,7 +745,7 @@ private:
             Align a = left ? Align::Left : Align::Right;
             Align b = left ? Align::Right : Align::Left;
             double dr = 7 * s;
-            Circle{ edge + dir * dr, y1, dr + 2 * s }.draw(col::panel);
+            Circle{ edge + dir * dr, y1, dr + 2 * s }.draw(col::bg);
             disc(Vec2{ edge + dir * dr, y1 }, dr, color);
             if (!g.active) continue;
             double name_x = edge + dir * (dr * 2 + 6 * s);
@@ -915,10 +909,11 @@ private:
             text(bold, U"Replay", label_size, Align::Right,
                 Vec2{ paused ? geometry.play.x - 8 : r.rightX() - 4, heading_y }, col::text, r.w - 90);
             if (paused) {
-                geometry.play.draw(geometry.play.mouseOver() ? col::bg : col::panel);
-                geometry.play.drawFrame(1, col::border);
+                bool hovered = geometry.play.mouseOver();
+                geometry.play.draw(hovered ? col::text : col::bg);
+                geometry.play.drawFrame(1, col::text);
                 Vec2 c = geometry.play.center();
-                Triangle{ Vec2{ c.x - 4, c.y - 6 }, Vec2{ c.x - 4, c.y + 6 }, Vec2{ c.x + 6, c.y } }.draw(col::text);
+                Triangle{ Vec2{ c.x - 4, c.y - 6 }, Vec2{ c.x - 4, c.y + 6 }, Vec2{ c.x + 6, c.y } }.draw(hovered ? col::on_accent : col::text);
             }
         }
         // Identify the source of each estimate by name, rather than L/R codes.
@@ -945,7 +940,6 @@ private:
         auto px = [&](double ply) { return plot.x + plot.w * Clamp(ply / xmax, 0.0, 1.0); };
         auto py = [&](double v) { return plot.centerY() - Clamp(v / range, -1.0, 1.0) * plot.h / 2; };
 
-        plot.draw(col::panel);
         if (split >= 0) {
             double x = px(split);
             RectF{ x, plot.y, plot.rightX() - x, plot.h }.draw(col::graph_diverged);
@@ -981,7 +975,7 @@ private:
             RectF tag{ Clamp(x - w / 2, plot.x, plot.rightX() - w), plot.y - label_h - 11, w, label_h + 4 };
             // The pointer and divider share the exact move coordinate, even when the label is clamped at an edge.
             RectF{ x - 1, plot.y, 2, plot.h }.draw(col::sub);
-            tag.draw(reached ? col::text : col::panel);
+            tag.draw(reached ? col::text : col::bg);
             if (!reached) tag.drawFrame(1.5, col::sub);
             text(bold, label, label_size, Align::Center, tag.center(), reached ? col::on_accent : col::sub);
             Triangle{ Vec2{ x - 4, tag.bottomY() }, Vec2{ x + 4, tag.bottomY() }, Vec2{ x, plot.y - 1 } }.draw(reached ? col::text : col::sub);
