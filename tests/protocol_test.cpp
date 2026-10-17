@@ -492,18 +492,21 @@ static void test_opening_evaluation() {
         CHECK(!series.empty() && series.front().first == 59 && series.front().second == 0.0);
     }
     double value = 0;
-    CHECK(!m.engine_eval_at(m.game[1], WHITE, 0, value));
-    CHECK(m.engine_eval_at(m.game[1], WHITE, 1, value) && value == -3.5);
-    CHECK(m.engine_eval_at(m.game[0], WHITE, 1, value) && value == -4.0);
+    // Opening graph points are zero, but numerical readouts require this game's own reports.
+    CHECK(!m.game[1].engine_eval_at(WHITE, 0, value));
+    CHECK(!m.game[1].engine_eval_at(WHITE, 1, value));
+    CHECK(!m.game[0].engine_eval_at(WHITE, 1, value));
+    CHECK(m.game[0].engine_eval_at(BLACK, 1, value) && value == 3.5);
+    CHECK(m.game[1].engine_eval_at(BLACK, 1, value) && value == 4.0);
 
     m.game[1].evals[WHITE] = { { 2, -2.0, false, 58 }, { 4, 0.0, false, 56 } };
     auto series = m.eval_series(0);
     CHECK(series.size() == 4);
     CHECK(series[0].second == 0.0 && series[1].second == 1.5);
     CHECK(series[2].second == 3.0 && series[3].second == 5.0);
-    CHECK(m.engine_eval_at(m.game[1], WHITE, 1, value) && value == -3.5); // no future reports in replay
-    CHECK(m.engine_eval_at(m.game[1], WHITE, 2, value) && value == -2.0);
-    CHECK(m.engine_eval_at(m.game[1], WHITE, 4, value) && value == 0.0); // a real zero overrides the inference
+    CHECK(!m.game[1].engine_eval_at(WHITE, 1, value)); // no future reports or inferred values in replay
+    CHECK(m.game[1].engine_eval_at(WHITE, 2, value) && value == -2.0);
+    CHECK(m.game[1].engine_eval_at(WHITE, 4, value) && value == 0.0); // a real zero is displayed
 }
 
 static void test_empty_square_axis() {

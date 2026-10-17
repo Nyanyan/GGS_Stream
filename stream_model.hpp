@@ -199,20 +199,6 @@ struct MatchView {
         return game[0].active && game[1].active && game[0].finished && game[1].finished;
     }
 
-    // Before a player's first report in one game, mirror their estimate in the other game.
-    bool engine_eval_at(const GameView& g, int color, int at_ply, double& value) const {
-        if (g.engine_eval_at(color, at_ply, value)) return true;
-        for (const auto& other : game) {
-            if (&other == &g) continue;
-            int c = other.color_of(g.name[color]);
-            if (c >= 0 && other.engine_eval_at(c, at_ply, value)) {
-                value = -value;
-                return true;
-            }
-        }
-        return false;
-    }
-
     // sum of both games' results for player[0]
     bool result_sum(double& value) const {
         if (has_result) {
