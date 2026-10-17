@@ -25,7 +25,8 @@
         --title TEXT        title shown on the stream
         --fullscreen        start in fullscreen
         --focus N           start with match N shown alone (keys 1-9 / 0 while running)
-        --sound             play a sound on every move (key S while running)
+        --sound             enable move sounds (default; key S while running)
+        --no-sound          start with move sounds muted
         --capture PREFIX    save screenshots as PREFIX_<sec>.png ...
         --capture-at A,B,C  ... at these times in seconds
         --quit-after SEC    exit automatically
@@ -42,7 +43,7 @@ struct Config {
     uint64_t demo_seed = 0;
     bool fullscreen = false;
     int focus = -1;
-    bool sound = false;
+    bool sound = true;
     std::string capture_prefix;
     std::vector<double> capture_at;
     double quit_after = -1.0;
@@ -65,6 +66,7 @@ static Config load_config() {
         else if (a == U"--title") cfg.title = next();
         else if (a == U"--fullscreen") cfg.fullscreen = true;
         else if (a == U"--sound") cfg.sound = true;
+        else if (a == U"--no-sound") cfg.sound = false;
         else if (a == U"--focus") cfg.focus = ParseOr<int32>(Unicode::FromUTF8(next()), 0) - 1;
         else if (a == U"--capture") cfg.capture_prefix = next();
         else if (a == U"--capture-at") {
@@ -131,6 +133,22 @@ static std::map<std::string, String> load_display_names() {
     return res;
 }
 
+// A short, damped tap generated directly, so playback does not require a MIDI soundfont.
+static Audio make_move_sound() {
+    Wave wave{ 0.08s };
+    uint32 noise = 1;
+    for (size_t i = 0; i < wave.size(); ++i) {
+        double t = (double)i / wave.sampleRate();
+        noise = noise * 1664525u + 1013904223u;
+        double n = (double)(noise >> 16) / 32767.5 - 1.0;
+        double envelope = (1.0 - std::exp(-1800.0 * t)) * std::exp(-85.0 * t);
+        double tap = 0.65 * std::sin(Math::TwoPi * 1100.0 * t)
+            + 0.20 * std::sin(Math::TwoPi * 2300.0 * t) + 0.15 * n;
+        wave[i].set((float)(0.8 * envelope * tap));
+    }
+    return Audio{ std::move(wave) };
+}
+
 static void setup_window() {
     Window::SetTitle(U"GGS Stream");
     System::SetTerminationTriggers(UserAction::CloseButtonClicked); // Esc must not end the stream
@@ -195,8 +213,10 @@ void Main()
     state.send = [&](const std::string& cmd) { source->send(cmd); };
     state.log = [](const std::string& s) { app_log().write("STATE", s); };
 
-    const Audio move_sound{ GMInstrument::Woodblock, 76, 0.25s };
+    const Audio move_sound = make_move_sound();
+    if (!move_sound) app_log().write("ERROR", "failed to initialize move sound");
     bool sound = cfg.sound;
+    app_log().write("INFO", sound ? "move sound enabled" : "move sound muted");
     if (sound) {
         info.toast = U"SOUND ON";
         info.toast_until_ms = tim() + 3000;
@@ -225,6 +245,7 @@ void Main()
         if (KeyF1.down()) info.debug = !info.debug;
         if (KeyS.down()) {
             sound = !sound;
+            app_log().write("INFO", sound ? "move sound enabled" : "move sound muted");
             info.toast = sound ? U"SOUND ON" : U"SOUND OFF";
             info.toast_until_ms = now + 1500;
         }
