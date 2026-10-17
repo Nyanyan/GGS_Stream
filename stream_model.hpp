@@ -110,7 +110,6 @@ struct GameView {
     bool has_clock = false;
     uint64_t clock_ms = 0;
     std::vector<EvalPoint> evals[2]; // by color
-    bool sends_eval[2] = { false, false };
     bool finished = false;
     uint64_t finished_ms = 0;
     bool has_official_result = false;
@@ -788,10 +787,9 @@ private:
 
     static void record_eval(GameView& g, int mover, const MoveInfo& mv, bool forced_known, bool forced) {
         if (mover != BLACK && mover != WHITE) return;
-        if (mv.has_eval) g.sends_eval[mover] = true;
         if (mv.pass) return;                  // evaluations sent with a pass are meaningless
         if (forced_known && forced) return;   // only one legal move: evaluation is usually 0
-        if (!mv.has_eval && (!forced_known || !g.sends_eval[mover])) return;
+        if (!mv.has_eval && !forced_known) return;
         // the server omits an evaluation of exactly 0
         g.evals[mover].push_back(EvalPoint{ mv.ply, mv.has_eval ? mv.eval : 0.0, false });
     }
@@ -834,7 +832,6 @@ private:
         const Position& server_pos = bm.boards.back();
         for (int c = 0; c < 2; ++c) {
             g.evals[c].clear();
-            g.sends_eval[c] = false;
         }
         g.has_prev = false;
         g.finished = false;

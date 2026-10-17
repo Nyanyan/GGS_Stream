@@ -145,12 +145,74 @@ static void test_forced_eval() {
     st.on_message(frame_one("/os: update .7.0 s8r18 K?\n|  1: f5/3.50\n|a        (2000.0 *) 09:50,0:0//02:00,0:0\n|b        (2000.0 O) 10:00,0:0//02:00,0:0\n|\n" + board(q)), 1000);
     const stream::GameView& g = st.t.matches[0].game[0];
     CHECK(g.ply == 1 && g.evals[BLACK].size() == 1 && g.evals[BLACK][0].value == 3.5);
-    // white answers without evaluation: 3 legal moves, so it is a real 0 only if white sent evaluations before
+    // GGS omits zero even on this player's first report (e.g. f3//3.34 in the real log).
     ggs::Position r = q;
     stream::apply_move(r, false, 5 * 8 + 5);
     st.on_message(frame_one("/os: update .7.0 s8r18 K?\n|  2: f6\n|a        (2000.0 *) 09:50,0:0//02:00,0:0\n|b        (2000.0 O) 09:40,0:0//02:00,0:0\n|\n" + board(r)), 2000);
-    CHECK(st.t.matches[0].game[0].evals[WHITE].empty());
+    CHECK(g.evals[WHITE].size() == 1 && g.evals[WHITE][0].value == 0.0);
+    double value;
+    CHECK(g.engine_eval_at(WHITE, 2, value) && value == 0.0);
     CHECK(st.t.matches[0].game[0].has_prev);
+
+    // Rejoining must also recover an opening zero without any earlier nonzero report.
+    st.on_message(frame_one("/os: join .7.0 s8r18 K?\n|1 move(s)\n" + board(p)
+        + "|  1: f5//3.34\n|a (2000.0 *) 09:50\n|b (2000.0 O) 10:00\n" + board(q)), 3000);
+    CHECK(g.history_ok && g.engine_eval_at(BLACK, 1, value) && value == 0.0);
+
+    // A forced move still carries the previous estimate, even if an engine reports a value.
+    p.black = ggs::cell_bit(0) | ggs::cell_bit(62);
+    p.white = ggs::cell_bit(1) | ggs::cell_bit(63);
+    p.to_move = BLACK;
+    CHECK(pop_count_ull(stream::legal_moves(p)) == 1);
+    st.on_message(frame_one("/os: join .7.0 s8r18 K?\n|0 move(s)\n" + board(p)), 4000);
+    q = p;
+    CHECK(stream::apply_move(q, false, 2));
+    st.on_message(frame_one("/os: update .7.0 s8r18 K?\n|  1: c1/99.00\n" + board(q)), 5000);
+    CHECK(!g.finished && g.evals[BLACK].empty());
+}
+
+static void test_recorded_log(const std::string& path) {
+    stream::StreamState st("31");
+    ggs::MessageFramer framer;
+    size_t checked = 0, zeroes = 0;
+    auto consume = [&](uint64_t now) {
+        for (const auto& msg : framer.take()) {
+            ggs::BoardMessage bm;
+            bool check = false;
+            int mover = -1;
+            if (ggs::parse_board_message(msg, bm) && !bm.is_join && !bm.moves.empty()) {
+                auto* m = st.t.find_match(bm.match_id);
+                if (m && bm.sub >= 0 && bm.sub < 2) {
+                    const auto& g = m->game[bm.sub];
+                    mover = g.pos.to_move;
+                    check = g.active && bm.moves.back().ply == g.ply + 1 && !bm.moves.back().pass
+                        && pop_count_ull(stream::legal_moves(g.pos)) > 1;
+                }
+            }
+            st.on_message(msg, now);
+            if (check) {
+                const auto* m = st.t.find_match(bm.match_id);
+                const auto& mv = bm.moves.back();
+                double value = 0;
+                CHECK(m && m->game[bm.sub].engine_eval_at(mover, mv.ply, value));
+                CHECK(value == (mv.has_eval ? mv.eval : 0.0));
+                ++checked;
+                if (!mv.has_eval) ++zeroes;
+            }
+        }
+    };
+    auto lines = load_log(path);
+    CHECK(!lines.empty());
+    for (const auto& line : lines) {
+        framer.feed(line.text + "\n", line.t_ms);
+        consume(line.t_ms);
+    }
+    if (!lines.empty()) {
+        framer.tick(lines.back().t_ms + 1000);
+        consume(lines.back().t_ms + 1000);
+    }
+    CHECK(checked > 0 && zeroes > 0);
+    std::cout << "recorded log: " << checked << " evaluations checked, including " << zeroes << " omitted zeroes" << std::endl;
 }
 
 static void test_real_rankings() {
@@ -402,7 +464,7 @@ static void test_replay_seek() {
     CHECK(!live.seek(match, 2) && !live.paused());
 }
 
-int main() {
+int main(int argc, char** argv) {
     bit_init();
     mobility_init();
     flip_init();
@@ -413,6 +475,7 @@ int main() {
     test_synchro_divergence();
     test_engine_evaluation();
     test_replay_seek();
+    if (argc > 1) test_recorded_log(argv[1]);
     run_simulation(6, 1);
     run_simulation(4, 2);
     run_simulation(8, 3);
