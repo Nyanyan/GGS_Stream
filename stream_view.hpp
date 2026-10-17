@@ -657,16 +657,16 @@ private:
         text(heavy, format_signed(mine), size, a, p, col::text);
     }
 
-    static String engine_evaluation(const GameView& g, const stream::ReplayFrame& f, int color) {
+    static String engine_evaluation(const MatchView& m, const GameView& g, const stream::ReplayFrame& f, int color) {
         double value = 0;
-        if (!g.engine_eval_at(color, f.active ? f.ply : g.ply, value)) return U"\u2014";
+        if (!m.engine_eval_at(g, color, f.active ? f.ply : g.ply, value)) return U"\u2014";
         if (std::abs(value) < 0.05) value = 0; // avoid displaying a rounded negative zero
         return U"{:+.1f}"_fmt(value);
     }
 
-    void draw_engine_evaluation(const GameView& g, const stream::ReplayFrame& f, int color,
+    void draw_engine_evaluation(const MatchView& m, const GameView& g, const stream::ReplayFrame& f, int color,
         double size, Align a, const Vec2& p, double max_w) {
-        String value = engine_evaluation(g, f, color);
+        String value = engine_evaluation(m, g, f, color);
         if (value == U"\u2014") text(heavy, value, size, a, p, col::faint, max_w);
         else mono(heavy, digit_ratio_heavy, value, size, a, p, col::text, max_w);
     }
@@ -705,7 +705,7 @@ private:
             double value_top = y_name + band_h / 2 + 6;
             double value_bottom = y_clock - clock_h / 2 - 6;
             double value_size = Min(48 * s, Max(15.0, (value_bottom - value_top) * 48 / heavy(U"64").region(48).h));
-            draw_engine_evaluation(g, f, color, value_size, Align::Left,
+            draw_engine_evaluation(m, g, f, color, value_size, Align::Left,
                 Vec2{ x, (value_top + value_bottom) / 2 }, h.w - 24 * s);
             if (g.finished) {
                 draw_game_score(g, color, fs(23 * s), Align::Left, Vec2{ x, y_clock });
@@ -758,7 +758,7 @@ private:
                 double secondary_w = bold(secondary).region(fs(19 * s)).w;
                 value_w -= secondary_w + 8 * s;
             }
-            draw_engine_evaluation(g, f, color, fs(26 * s), f.active ? a : b,
+            draw_engine_evaluation(m, g, f, color, fs(26 * s), f.active ? a : b,
                 Vec2{ f.active ? edge : inner, y2 }, Max(1.0, value_w));
             if (g.finished && !f.active) {
                 draw_game_score(g, color, fs(19 * s), a, Vec2{ edge, y2 });

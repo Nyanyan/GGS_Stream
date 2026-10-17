@@ -464,6 +464,32 @@ static void test_replay_seek() {
     CHECK(!live.seek(match, 2) && !live.paused());
 }
 
+static void test_opening_evaluation() {
+    stream::MatchView m;
+    m.player[0] = m.game[0].name[BLACK] = m.game[1].name[WHITE] = "a";
+    m.player[1] = m.game[0].name[WHITE] = m.game[1].name[BLACK] = "b";
+    CHECK(m.eval_series(0).empty() && m.eval_series(1).empty());
+    m.game[0].evals[BLACK] = { { 1, 3.5, false }, { 3, 5.0, false } };
+    m.game[1].evals[BLACK] = { { 1, 4.0, false } };
+    for (int i = 0; i < 2; ++i) {
+        auto series = m.eval_series(i);
+        CHECK(!series.empty() && series.front().first == 1 && series.front().second == 0.0);
+    }
+    double value = 0;
+    CHECK(!m.engine_eval_at(m.game[1], WHITE, 0, value));
+    CHECK(m.engine_eval_at(m.game[1], WHITE, 1, value) && value == -3.5);
+    CHECK(m.engine_eval_at(m.game[0], WHITE, 1, value) && value == -4.0);
+
+    m.game[1].evals[WHITE] = { { 2, -2.0, false }, { 4, 0.0, false } };
+    auto series = m.eval_series(0);
+    CHECK(series.size() == 4);
+    CHECK(series[0].second == 0.0 && series[1].second == 1.5);
+    CHECK(series[2].second == 3.0 && series[3].second == 5.0);
+    CHECK(m.engine_eval_at(m.game[1], WHITE, 1, value) && value == -3.5); // no future reports in replay
+    CHECK(m.engine_eval_at(m.game[1], WHITE, 2, value) && value == -2.0);
+    CHECK(m.engine_eval_at(m.game[1], WHITE, 4, value) && value == 0.0); // a real zero overrides the inference
+}
+
 int main(int argc, char** argv) {
     bit_init();
     mobility_init();
@@ -474,6 +500,7 @@ int main(int argc, char** argv) {
     test_log_replay();
     test_synchro_divergence();
     test_engine_evaluation();
+    test_opening_evaluation();
     test_replay_seek();
     if (argc > 1) test_recorded_log(argv[1]);
     run_simulation(6, 1);
