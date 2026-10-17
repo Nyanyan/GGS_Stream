@@ -932,12 +932,12 @@ private:
             range = cand;
             if (cand >= maxabs * 1.05) break;
         }
-        double xmax = Max(1, m.x_max());
-        auto px = [&](double ply) { return plot.x + plot.w * Clamp(ply / xmax, 0.0, 1.0); };
+        double xmax = Max(1, m.initial_empties());
+        auto px = [&](double empties) { return plot.x + plot.w * Clamp((xmax - empties) / xmax, 0.0, 1.0); };
         auto py = [&](double v) { return plot.centerY() - Clamp(v / range, -1.0, 1.0) * plot.h / 2; };
 
         if (split >= 0) {
-            double x = px(split);
+            double x = px(m.graph_empties_at(split));
             RectF{ x, plot.y, plot.rightX() - x, plot.h }.draw(col::graph_diverged);
         }
         RectF{ plot.x, plot.y, plot.w, 1 }.draw(ColorF{ col::text, 0.10 });
@@ -949,10 +949,10 @@ private:
         text(medium, U"0", size, Align::Right, Vec2{ lx, plot.centerY() }, col::faint);
         text(medium, U"-{}"_fmt((int)range), size, Align::Right, Vec2{ lx, plot.bottomY() - size * 0.35 }, col::sub);
         const double axis_y = plot.bottomY() + 13;
-        text(medium, U"0", size, Align::Left, Vec2{ plot.x, axis_y }, col::sub);
-        int middle_ply = (int)(xmax / 2);
-        text(medium, U"{}"_fmt(middle_ply), size, Align::Center, Vec2{ px(middle_ply), axis_y }, col::sub);
-        text(medium, U"{}"_fmt((int)xmax), size, Align::Right, Vec2{ plot.rightX(), axis_y }, col::sub);
+        text(medium, U"{}"_fmt((int)xmax), size, Align::Left, Vec2{ plot.x, axis_y }, col::sub);
+        int middle_empties = (int)(xmax / 2);
+        text(medium, U"Empty squares: {}"_fmt(middle_empties), size, Align::Center, Vec2{ px(middle_empties), axis_y }, col::sub);
+        text(medium, U"0", size, Align::Right, Vec2{ plot.rightX(), axis_y }, col::sub);
 
         auto draw_series = [&](const std::vector<std::pair<int, double>>& series, double sign, int idx) {
             if (series.empty()) return;
@@ -967,12 +967,12 @@ private:
         draw_series(sb, -1.0, 1);
         draw_series(sa, 1.0, 0);
         if (split >= 0) {
-            double x = px(split);
+            double x = px(m.graph_empties_at(split));
             bool reached = cursor_ply < 0 || cursor_ply >= split;
             String label = U"Diverged";
             double w = bold(label).region(label_size).w + 16;
             RectF tag{ Clamp(x - w / 2, plot.x, plot.rightX() - w), plot.y - label_h - 11, w, label_h + 4 };
-            // The pointer and divider share the exact move coordinate, even when the label is clamped at an edge.
+            // The pointer and divider share the empty-square coordinate, even at a clamped label.
             RectF{ x - 1, plot.y, 2, plot.h }.draw(col::sub);
             tag.draw(reached ? col::text : col::bg);
             if (!reached) tag.drawFrame(1.5, col::sub);
@@ -980,7 +980,7 @@ private:
             Triangle{ Vec2{ x - 4, tag.bottomY() }, Vec2{ x + 4, tag.bottomY() }, Vec2{ x, plot.y - 1 } }.draw(reached ? col::text : col::sub);
         }
         if (cursor_ply >= 0) {
-            double x = px(cursor_ply);
+            double x = px(m.graph_empties_at(cursor_ply));
             RectF{ x - 1.5, plot.y, 3, plot.h }.draw(col::text);
         }
     }

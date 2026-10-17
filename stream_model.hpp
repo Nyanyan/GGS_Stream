@@ -89,6 +89,7 @@ struct EvalPoint {
     int ply;
     double value;
     bool exact; // final result of the game
+    int empties = 0; // actual board occupancy; passes do not consume a square
 };
 
 struct GameView {
@@ -155,9 +156,18 @@ struct GameView {
         return false;
     }
 
-    int x_max() const {
-        int e = start_empties > 0 ? start_empties : 60;
-        return std::max(e, ply);
+    int initial_empties() const {
+        if (has_start) return HW2 - pop_count_ull(start.black | start.white);
+        return start_empties > 0 ? start_empties : 60;
+    }
+
+    int empties_at(int at_ply) const {
+        if (at_ply >= 0 && at_ply < (int)history.size()) {
+            const auto& p = history[at_ply];
+            return HW2 - pop_count_ull(p.black | p.white);
+        }
+        if (active && at_ply >= ply) return HW2 - pop_count_ull(pos.black | pos.white);
+        return std::max(0, initial_empties() - at_ply);
     }
 };
 
@@ -222,7 +232,8 @@ struct MatchView {
 
     /*
         @brief sum of the player's evaluations over both games (player's own perspective)
-        returns (ply, value) points, mirroring a missing opening estimate from the other game
+        returns (empty squares, value) points in decreasing empty-square order
+        A missing opening estimate is mirrored from the other game.
     */
     std::vector<std::pair<int, double>> eval_series(int idx) const {
         std::vector<std::pair<int, double>> res;
@@ -232,18 +243,18 @@ struct MatchView {
             if (c < 0) return res;
             series[i] = &game[i].evals[c];
         }
-        std::vector<int> plies;
+        std::vector<int> empties;
         for (int i = 0; i < 2; ++i) {
-            for (const EvalPoint& p : *series[i]) plies.push_back(p.ply);
+            for (const EvalPoint& p : *series[i]) empties.push_back(p.empties);
         }
-        std::sort(plies.begin(), plies.end());
-        plies.erase(std::unique(plies.begin(), plies.end()), plies.end());
+        std::sort(empties.begin(), empties.end(), std::greater<int>{});
+        empties.erase(std::unique(empties.begin(), empties.end()), empties.end());
         size_t it[2] = { 0, 0 };
         double value[2] = { 0.0, 0.0 };
         bool has[2] = { false, false };
-        for (int x : plies) {
+        for (int x : empties) {
             for (int i = 0; i < 2; ++i) {
-                while (it[i] < series[i]->size() && (*series[i])[it[i]].ply <= x) {
+                while (it[i] < series[i]->size() && (*series[i])[it[i]].empties >= x) {
                     value[i] = (*series[i])[it[i]].value;
                     has[i] = true;
                     ++it[i];
@@ -255,8 +266,15 @@ struct MatchView {
         return res;
     }
 
-    int x_max() const {
-        return std::max(game[0].x_max(), game[1].x_max());
+    int initial_empties() const {
+        return std::max(game[0].initial_empties(), game[1].initial_empties());
+    }
+
+    // Replay advances both boards by ply. Use the less advanced board for its shared cursor.
+    int graph_empties_at(int at_ply) const {
+        int empties = 0;
+        for (const auto& g : game) empties = std::max(empties, g.empties_at(std::min(at_ply, g.ply)));
+        return empties;
     }
 
     // Compare only plies known in both games. Unequal arrival times are not a split.
@@ -334,7 +352,17 @@ struct ReplayControl {
     }
 
     bool seek_fraction(const MatchView& m, double fraction) {
-        return seek(m, (int)std::lround(std::clamp(fraction, 0.0, 1.0) * m.x_max()));
+        int target = m.initial_empties() - (int)std::lround(std::clamp(fraction, 0.0, 1.0) * m.initial_empties());
+        int best_ply = 0;
+        int best_distance = std::abs(m.graph_empties_at(0) - target);
+        for (int ply = 1; ply <= length(m); ++ply) {
+            int distance = std::abs(m.graph_empties_at(ply) - target);
+            if (distance < best_distance || (distance == best_distance && target < m.initial_empties())) {
+                best_distance = distance;
+                best_ply = ply;
+            }
+        }
+        return seek(m, best_ply);
     }
 
     void resume(const MatchView& m, uint64_t now) {
@@ -795,18 +823,18 @@ private:
             if (!g.evals[c].empty() && g.evals[c].back().exact) {
                 g.evals[c].back().value = v;
             } else {
-                g.evals[c].push_back(EvalPoint{ g.ply, v, true });
+                g.evals[c].push_back(EvalPoint{ g.ply, v, true, HW2 - pop_count_ull(g.pos.black | g.pos.white) });
             }
         }
     }
 
-    static void record_eval(GameView& g, int mover, const MoveInfo& mv, bool forced_known, bool forced) {
+    static void record_eval(GameView& g, int mover, const MoveInfo& mv, bool forced_known, bool forced, int empties) {
         if (mover != BLACK && mover != WHITE) return;
         if (mv.pass) return;                  // evaluations sent with a pass are meaningless
         if (forced_known && forced) return;   // only one legal move: evaluation is usually 0
         if (!mv.has_eval && !forced_known) return;
         // the server omits an evaluation of exactly 0
-        g.evals[mover].push_back(EvalPoint{ mv.ply, mv.has_eval ? mv.eval : 0.0, false });
+        g.evals[mover].push_back(EvalPoint{ mv.ply, mv.has_eval ? mv.eval : 0.0, false, empties });
     }
 
     void on_board(const ggs::BoardMessage& bm, uint64_t now) {
@@ -868,7 +896,8 @@ private:
             if (replay_ok) {
                 int mover = p.to_move;
                 int n_legal = pop_count_ull(legal_moves(p));
-                record_eval(g, mover, mv, true, mv.pass || n_legal <= 1);
+                record_eval(g, mover, mv, true, mv.pass || n_legal <= 1,
+                    HW2 - pop_count_ull(p.black | p.white) - (mv.pass ? 0 : 1));
                 if (!apply_move(p, mv.pass, mv.cell)) {
                     write_log("replay failed at ply " + std::to_string(mv.ply) + " in " + g.id);
                     replay_ok = false;
@@ -877,7 +906,7 @@ private:
                     g.history_cell.push_back(mv.pass ? -1 : mv.cell);
                 }
             } else {
-                record_eval(g, -1, mv, false, false);
+                record_eval(g, -1, mv, false, false, -1);
             }
         }
         if (replay_ok && !(p == server_pos)) {
@@ -909,7 +938,8 @@ private:
             Position p = g.pos;
             int mover = p.to_move;
             int n_legal = pop_count_ull(legal_moves(p));
-            record_eval(g, mover, mv, true, mv.pass || n_legal <= 1);
+            record_eval(g, mover, mv, true, mv.pass || n_legal <= 1,
+                HW2 - pop_count_ull(server_pos.black | server_pos.white));
             if (!apply_move(p, mv.pass, mv.cell) || !(p == server_pos)) {
                 write_log("position mismatch at ply " + std::to_string(mv.ply) + " in " + g.id + ", resynchronized");
                 g.history_ok = false;
@@ -921,7 +951,7 @@ private:
             g.history_ok = false;
             // missed some moves: the player who moved is the one not to move now (unless a pass followed)
             int mover = server_pos.to_move ^ 1;
-            record_eval(g, mover, mv, false, false);
+            record_eval(g, mover, mv, false, false, HW2 - pop_count_ull(server_pos.black | server_pos.white));
             if (!g.active) {
                 g.start_empties = HW2 - pop_count_ull(server_pos.black | server_pos.white) + mv.ply;
             }

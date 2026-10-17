@@ -196,6 +196,14 @@ static void test_recorded_log(const std::string& path) {
                 double value = 0;
                 CHECK(m && m->game[bm.sub].engine_eval_at(mover, mv.ply, value));
                 CHECK(value == (mv.has_eval ? mv.eval : 0.0));
+                if (m) {
+                    const auto& points = m->game[bm.sub].evals[mover];
+                    auto point = std::find_if(points.rbegin(), points.rend(), [&](const auto& p) {
+                        return p.ply == mv.ply && !p.exact;
+                    });
+                    CHECK(point != points.rend());
+                    CHECK(point != points.rend() && point->empties == HW2 - pop_count_ull(bm.boards.back().black | bm.boards.back().white));
+                }
                 ++checked;
                 if (!mv.has_eval) ++zeroes;
             }
@@ -324,6 +332,12 @@ static void run_simulation(int n_players, uint64_t seed) {
                 const stream::GameView& g = m.game[i];
                 CHECK(g.can_replay());
                 CHECK((int)g.history.size() == g.ply + 1 && g.history.back() == g.pos);
+                for (int color = 0; color < 2; ++color) {
+                    for (const auto& point : g.evals[color]) CHECK(point.empties == g.empties_at(point.ply));
+                }
+                auto series = m.eval_series(i);
+                CHECK(!series.empty() && series.back().second == (i == 0 ? r : -r));
+                for (size_t j = 1; j < series.size(); ++j) CHECK(series[j - 1].first > series[j].first);
                 // replay: final position first, then the start position, then moves
                 uint64_t base = std::max(m.game[0].finished_ms, m.game[1].finished_ms);
                 CHECK(!stream::replay_frame(m, i, base + 100).active);
@@ -429,7 +443,7 @@ static void test_replay_seek() {
         auto& g = match.game[i];
         g.active = g.finished = g.history_ok = true;
         g.finished_ms = 1000;
-        g.start_empties = 5;
+        g.start_empties = 60;
         g.history.push_back(start);
         auto pos = start;
         for (int ply = 0; ply < (i == 0 ? 3 : 5); ++ply) {
@@ -440,12 +454,14 @@ static void test_replay_seek() {
             g.history.push_back(pos);
             g.history_cell.push_back(cell);
         }
+        g.ply = (int)g.history.size() - 1;
+        g.pos = g.history.back();
     }
     stream::ReplayControl control;
     CHECK(stream::ReplayControl::length(match) == 5);
     CHECK(control.seek_fraction(match, -1) && control.selected_ply == 0);
     CHECK(control.frame(match, 0, 1000).active); // manual seek works before automatic replay starts
-    CHECK(control.seek_fraction(match, 0.5) && control.selected_ply == 3);
+    CHECK(control.seek_fraction(match, 2.0 / 60) && control.selected_ply == 2);
     CHECK(control.seek(match, 2));
     CHECK(control.frame(match, 0, 1000).ply == 2);
     CHECK(control.frame(match, 1, 999999).ply == 2); // remains paused after release
@@ -469,18 +485,18 @@ static void test_opening_evaluation() {
     m.player[0] = m.game[0].name[BLACK] = m.game[1].name[WHITE] = "a";
     m.player[1] = m.game[0].name[WHITE] = m.game[1].name[BLACK] = "b";
     CHECK(m.eval_series(0).empty() && m.eval_series(1).empty());
-    m.game[0].evals[BLACK] = { { 1, 3.5, false }, { 3, 5.0, false } };
-    m.game[1].evals[BLACK] = { { 1, 4.0, false } };
+    m.game[0].evals[BLACK] = { { 1, 3.5, false, 59 }, { 3, 5.0, false, 57 } };
+    m.game[1].evals[BLACK] = { { 1, 4.0, false, 59 } };
     for (int i = 0; i < 2; ++i) {
         auto series = m.eval_series(i);
-        CHECK(!series.empty() && series.front().first == 1 && series.front().second == 0.0);
+        CHECK(!series.empty() && series.front().first == 59 && series.front().second == 0.0);
     }
     double value = 0;
     CHECK(!m.engine_eval_at(m.game[1], WHITE, 0, value));
     CHECK(m.engine_eval_at(m.game[1], WHITE, 1, value) && value == -3.5);
     CHECK(m.engine_eval_at(m.game[0], WHITE, 1, value) && value == -4.0);
 
-    m.game[1].evals[WHITE] = { { 2, -2.0, false }, { 4, 0.0, false } };
+    m.game[1].evals[WHITE] = { { 2, -2.0, false, 58 }, { 4, 0.0, false, 56 } };
     auto series = m.eval_series(0);
     CHECK(series.size() == 4);
     CHECK(series[0].second == 0.0 && series[1].second == 1.5);
@@ -488,6 +504,47 @@ static void test_opening_evaluation() {
     CHECK(m.engine_eval_at(m.game[1], WHITE, 1, value) && value == -3.5); // no future reports in replay
     CHECK(m.engine_eval_at(m.game[1], WHITE, 2, value) && value == -2.0);
     CHECK(m.engine_eval_at(m.game[1], WHITE, 4, value) && value == 0.0); // a real zero overrides the inference
+}
+
+static void test_empty_square_axis() {
+    stream::MatchView m;
+    m.player[0] = m.game[0].name[WHITE] = m.game[1].name[BLACK] = "a";
+    m.player[1] = m.game[0].name[BLACK] = m.game[1].name[WHITE] = "b";
+    ggs::Position p;
+    p.black = ggs::cell_bit(1) | ggs::cell_bit(62);
+    p.white = ggs::cell_bit(0) | ggs::cell_bit(63);
+    p.to_move = BLACK;
+    auto& g = m.game[0];
+    g.history.push_back(p);
+    CHECK(stream::apply_move(p, true, -1));
+    g.history.push_back(p);
+    CHECK(stream::apply_move(p, false, 2));
+    g.history.push_back(p);
+    CHECK(stream::apply_move(p, true, -1));
+    g.history.push_back(p);
+    CHECK(stream::apply_move(p, false, 61));
+    g.history.push_back(p);
+    CHECK(g.empties_at(0) == 60 && g.empties_at(1) == 60);
+    CHECK(g.empties_at(2) == 59 && g.empties_at(3) == 59 && g.empties_at(4) == 58);
+    // Equal occupancy, different move numbers: aggregate at 59/58 empty squares.
+    g.evals[WHITE] = { { 2, 3.0, false, 59 }, { 4, 12.0, true, 58 } };
+    m.game[1].evals[BLACK] = { { 1, -2.0, false, 59 }, { 2, 5.0, false, 58 } };
+    auto series = m.eval_series(0);
+    CHECK(series.size() == 2);
+    CHECK(series[0].first == 59 && series[0].second == 1.0);
+    CHECK(series[1].first == 58 && series[1].second == 17.0);
+
+    for (auto& game : m.game) {
+        game.active = game.finished = game.history_ok = true;
+        game.history = g.history;
+        game.ply = 4;
+        game.pos = game.history.back();
+    }
+    stream::ReplayControl control;
+    CHECK(control.seek_fraction(m, 0.0) && control.selected_ply == 0);
+    CHECK(control.seek_fraction(m, 1.0 / 60) && control.selected_ply == 3); // after the pass at 59 empties
+    CHECK(m.graph_empties_at(control.selected_ply) == 59);
+    CHECK(control.seek_fraction(m, 1.0) && control.selected_ply == 4); // an early finish stays at 58 empties
 }
 
 int main(int argc, char** argv) {
@@ -501,6 +558,7 @@ int main(int argc, char** argv) {
     test_synchro_divergence();
     test_engine_evaluation();
     test_opening_evaluation();
+    test_empty_square_axis();
     test_replay_seek();
     if (argc > 1) test_recorded_log(argv[1]);
     run_simulation(6, 1);
