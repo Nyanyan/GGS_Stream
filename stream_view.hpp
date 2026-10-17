@@ -848,7 +848,7 @@ private:
     }
 
     struct GraphMetrics {
-        double size, label_h, heading_y, legend_y;
+        double size, label_h, heading_y, upper_name_y, lower_name_y;
         RectF plot, play;
     };
 
@@ -856,10 +856,11 @@ private:
         double size = fs(14 * s);
         double h = Max(medium(U"Evaluation").region(size).h, bold(U"Diverged").region(size).h);
         double heading = r.y + h / 2 + 2;
-        double legend = heading + h + 5;
-        double plot_y = legend + h / 2 + 8 + (has_divergence ? h + 11 : 0);
-        return { size, h, heading, legend,
-            RectF{ r.x + 40, plot_y, r.w - 50, r.bottomY() - 24 - plot_y },
+        double upper_name = heading + h + 5;
+        double lower_name = r.bottomY() - h / 2 - 2;
+        double plot_y = upper_name + h / 2 + 8 + (has_divergence ? h + 11 : 0);
+        return { size, h, heading, upper_name, lower_name,
+            RectF{ r.x + 40, plot_y, r.w - 50, lower_name - h / 2 - 30 - plot_y },
             RectF{ r.rightX() - 30, heading - (h + 4) / 2, 28, h + 4 } };
     }
 
@@ -914,15 +915,12 @@ private:
                 Triangle{ Vec2{ c.x - 4, c.y - 6 }, Vec2{ c.x - 4, c.y + 6 }, Vec2{ c.x + 6, c.y } }.draw(hovered ? col::on_accent : col::text);
             }
         }
-        // Identify the source of each estimate by name, rather than L/R codes.
-        const double legend_y = geometry.legend_y;
-        for (int i = 0; i < 2; ++i) {
-            double x = r.x + 4 + i * r.w / 2;
-            RectF{ x, legend_y - 2, 35, 4 }.draw(col::accent[i]);
-            text(medium, player_name(m.player[i]), label_size, Align::Left,
-                Vec2{ x + 43, legend_y }, col::text, r.w / 2 - 53);
-        }
         RectF plot = geometry.plot;
+        // Names identify both the advantage direction and the matching estimate colour.
+        text(bold, player_name(m.player[0]), label_size, Align::Center,
+            Vec2{ plot.centerX(), geometry.upper_name_y }, col::accent[0], plot.w);
+        text(bold, player_name(m.player[1]), label_size, Align::Center,
+            Vec2{ plot.centerX(), geometry.lower_name_y }, col::accent[1], plot.w);
         // Always draw the complete series, including moves beyond the replay cursor.
         auto sa = m.eval_series(0);
         auto sb = m.eval_series(1);
