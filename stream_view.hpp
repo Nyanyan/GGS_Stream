@@ -951,7 +951,7 @@ private:
         const double axis_y = plot.bottomY() + 13;
         text(medium, U"{}"_fmt((int)xmax), size, Align::Left, Vec2{ plot.x, axis_y }, col::sub);
         int middle_empties = (int)(xmax / 2);
-        text(medium, U"Empty squares: {}"_fmt(middle_empties), size, Align::Center, Vec2{ px(middle_empties), axis_y }, col::sub);
+        text(medium, U"{}"_fmt(middle_empties), size, Align::Center, Vec2{ px(middle_empties), axis_y }, col::sub);
         text(medium, U"0", size, Align::Right, Vec2{ plot.rightX(), axis_y }, col::sub);
 
         auto draw_series = [&](const std::vector<std::pair<int, double>>& series, double sign, int idx) {
