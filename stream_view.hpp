@@ -960,7 +960,10 @@ private:
             if (series.empty()) return;
             LineString ls;
             for (auto& p : series) ls << Vec2{ px(p.first), py(sign * p.second) };
-            if (ls.size() >= 2) ls.draw(Max(3.0, 3.0 * s), col::accent[idx]);
+            if (ls.size() >= 2) ls.draw(Max(2.0, 2.0 * s), col::accent[idx]);
+            // The blue marker stays visible around orange when both estimates coincide.
+            double radius = idx == 0 ? Max(2.0, 2.5 * s) : Max(3.0, 3.5 * s);
+            for (const auto& point : ls) Circle{ point, radius }.draw(col::accent[idx]);
         };
         // both in player[0]'s frame: upper half = player[0] ahead
         draw_series(sb, -1.0, 1);
